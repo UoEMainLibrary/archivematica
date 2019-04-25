@@ -250,7 +250,8 @@ def createDmdSecsFromCSVParsedMetadata(job, metadata, state):
     # If these terms are encountered, an element with only the
     # last portion of the name will be added.
     # e.g., dc.description.abstract is mapped to <dc:abstract>
-    refinement_regex = re.compile(r'\w+\.(.+)')
+
+    # refinement_regex = re.compile(r'\w+\.(.+)')
 
     for key, value in metadata.items():
         if key.startswith("dc.") or key.startswith("dcterms."):
@@ -273,9 +274,9 @@ def createDmdSecsFromCSVParsedMetadata(job, metadata, state):
             elif key.startswith("dcterms."):
                 key = key.replace("dcterms.", "", 1)
                 elem_namespace = ns.dctermsBNS
-            match = re.match(refinement_regex, key)
-            if match:
-                key, = match.groups()
+            # match = re.match(refinement_regex, key)
+            # if match:
+            #    key, = match.groups()
             for v in value:
                 try:
                     etree.SubElement(dc, elem_namespace + key).text = v.decode('utf-8')
