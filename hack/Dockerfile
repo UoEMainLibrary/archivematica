@@ -55,7 +55,9 @@ RUN set -ex \
 
 RUN set -ex \
 	&& groupadd --gid 333 --system archivematica \
-	&& useradd -m --uid 333 --gid 333 --system archivematica
+        && groupadd --gid 1131635 lacddt \
+	&& useradd -m --uid 333 --gid 333 --system archivematica \
+	&& usermod -a -G lacddt archivematica
 
 RUN set -ex \
 	&& mkdir -p /var/archivematica/sharedDirectory \
