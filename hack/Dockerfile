@@ -2,8 +2,8 @@ ARG TARGET=archivematica-mcp-server
 
 FROM ubuntu:22.04 AS base
 
-ARG USER_ID=1000
-ARG GROUP_ID=1000
+ARG USER_ID=333
+ARG GROUP_ID=333
 ARG PYTHON_VERSION=3.9
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -40,67 +40,44 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
+# OS dependencies
+COPY hack/osdeps.py /src/hack/osdeps.py
+COPY src/dashboard/osdeps /src/src/dashboard/osdeps
+COPY src/MCPServer/osdeps /src/src/MCPServer/osdeps
+COPY src/MCPClient/osdeps /src/src/MCPClient/osdeps
 RUN set -ex \
-	&& curl -fsSL https://packages.archivematica.org/1.16.x/key.asc | gpg --dearmor -o /etc/apt/keyrings/archivematica-1.16.x.gpg \
-	&& echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/archivematica-1.16.x.gpg] http://packages.archivematica.org/1.16.x/ubuntu-externals jammy main" > /etc/apt/sources.list.d/archivematica-external.list \
+	&& curl -s https://packages.archivematica.org/GPG-KEY-archivematica | apt-key add - \
+	&& add-apt-repository --no-update --yes "deb [arch=amd64] http://packages.archivematica.org/1.15.x/ubuntu-externals jammy main" \
 	&& add-apt-repository --no-update --yes "deb http://archive.ubuntu.com/ubuntu/ jammy multiverse" \
 	&& add-apt-repository --no-update --yes "deb http://archive.ubuntu.com/ubuntu/ jammy-security universe" \
 	&& add-apt-repository --no-update --yes "deb http://archive.ubuntu.com/ubuntu/ jammy-updates multiverse" \
-	&& curl -sS https://deb.nodesource.com/setup_20.x | bash - \
 	&& curl -so /tmp/repo-mediaarea_1.0-21_all.deb -L https://mediaarea.net/repo/deb/repo-mediaarea_1.0-21_all.deb \
 	&& dpkg -i /tmp/repo-mediaarea_1.0-21_all.deb \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends \
-		atool \
-		bulk-extractor \
-		clamav \
-		coreutils \
-		ffmpeg \
-		fits \
-		g++ \
-		gcc \
-		gearman \
-		ghostscript \
-		hashdeep \
-		imagemagick \
-		inkscape \
-		jhove \
-		libimage-exiftool-perl \
-		libldap2-dev \
-		libmysqlclient-dev \
-		libsasl2-dev \
-		libxslt1-dev \
-		libyaml-dev \
-		logapp \
-		md5deep \
-		mediaconch \
-		mediainfo \
-		nailgun \
-		nfs-common \
-		nodejs \
-		openjdk-8-jre-headless \
-		p7zip-full \
-		pbzip2 \
-		pst-utils \
-		rsync \
-		siegfried \
-		sleuthkit \
-		tesseract-ocr \
-		tree \
-		unar \
-		unrar-free \
-		uuid \
+		libyaml-dev clamav \
+	&& /src/hack/osdeps.py Ubuntu-22 1 | grep -v -E "nginx|postfix|python3.9-dev" | xargs apt-get install -y --no-install-recommends \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Download ClamAV virus signatures
 RUN freshclam --quiet
+
+# Install pip, Node.js and Yarn
+RUN set -ex \
+	&& curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
+	&& add-apt-repository --yes "deb https://dl.yarnpkg.com/debian/ stable main" \
+	&& apt-get install -y --no-install-recommends \
+		yarn nodejs \
+	&& rm -rf /var/lib/apt/lists/*
 
 ENV PYENV_ROOT="/pyenv/data"
 ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
 
 RUN set -ex \
 	&& groupadd --gid ${GROUP_ID} --system archivematica \
-	&& useradd --uid ${USER_ID} --gid ${GROUP_ID} --home-dir /var/archivematica --system archivematica \
+	&& useradd --uid ${USER_ID} --gid ${GROUP_ID} --home-dir /var/archivematica --system archivematica \ 
+        && groupadd --gid 1131635 lacddt \
+	&& usermod -a -G lacddt archivematica \
 	&& mkdir -p /var/archivematica/sharedDirectory \
 	&& mkdir -p /pyenv \
 	&& chown -R archivematica:archivematica /var/archivematica /pyenv
@@ -170,10 +147,8 @@ RUN set -ex \
 
 USER archivematica
 
-WORKDIR /src/src/dashboard/frontend
-
-RUN set ex  \
-    && npm install --no-package-lock
+RUN set -ex \
+	&& yarn --cwd=/src/src/dashboard/frontend install --frozen-lockfile
 
 WORKDIR /src/src/dashboard/src
 
@@ -224,7 +199,7 @@ USER archivematica
 
 WORKDIR /src/src/dashboard/frontend
 
-ENTRYPOINT ["npm", "run", "test-single-run"]
+ENTRYPOINT ["yarn", "run", "test-single-run"]
 
 # -----------------------------------------------------------------------------
 

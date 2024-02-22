@@ -168,14 +168,13 @@ bootstrap-dashboard-db:  ## Bootstrap Dashboard (new database).
 
 bootstrap-dashboard-frontend:  ## Build front-end assets.
 	docker compose run \
-		--workdir /src/src/dashboard/frontend \
-		-e HOME=/tmp/npm-config \
+		-e HOME=/tmp/yarn-config \
 		--rm \
 		--no-deps \
 		--user $(CALLER_UID):$(CALLER_GID) \
-		--entrypoint npm \
+		--entrypoint yarn \
 			archivematica-dashboard \
-				install --no-package-lock
+				--cwd=/src/src/dashboard/frontend install --frozen-lockfile
 
 restart-am-services:  ## Restart Archivematica services: MCPServer, MCPClient, Dashboard and Storage Service.
 	docker compose restart --no-deps archivematica-mcp-server
@@ -218,26 +217,6 @@ upgrade-requirements-ss:  ## Run pip-upgrade for Storage Service
 		--user $(CALLER_UID):$(CALLER_GID) \
 		--entrypoint bash archivematica-storage-service \
 			-c "make pip-upgrade"
-
-define amauat_make
-	docker compose \
-		-f docker-compose.yml \
-		-f docker-compose.acceptance-tests.yml \
-		run \
-			--workdir /src \
-			-e XDG_CACHE_HOME=/tmp/pip-cache \
-			--rm \
-			--no-deps \
-			--user $(CALLER_UID):$(CALLER_GID) \
-			--entrypoint bash archivematica-acceptance-tests \
-				-c "make $(1)"
-endef
-
-compile-requirements-amauat: test-at-build  ## Run pip-compile for AMAUATs
-	$(call amauat_make,pip-compile)
-
-upgrade-requirements-amauat: test-at-build  ## Run pip-upgrade for AMAUATs
-	$(call amauat_make,pip-upgrade)
 
 db:  ## Connect to the MySQL server using the CLI.
 	docker compose exec mysql mysql -hlocalhost -uroot -p12345
@@ -386,13 +365,13 @@ test-frontend:  ## Run Dashboard JS tests.
 		--build-arg TARGET=archivematica-dashboard-testing \
 			../
 	docker run \
-		-e HOME=/tmp/npm-config \
+		-e HOME=/tmp/yarn-config \
 		--rm \
 		--user $(CALLER_UID):$(CALLER_GID) \
 		--volume "$(SRCDIR)/dashboard:/src/src/dashboard" \
-		--entrypoint npm \
+		--entrypoint yarn \
 			archivematica-dashboard-testing \
-				install
+				--cwd=/src/src/dashboard/frontend install --frozen-lockfile
 	docker run \
 		--rm \
 		--volume "$(SRCDIR)/dashboard/frontend:/src/src/dashboard/frontend" \
