@@ -2,8 +2,8 @@ ARG TARGET=archivematica-mcp-server
 
 FROM ubuntu:22.04 AS base
 
-ARG USER_ID=1000
-ARG GROUP_ID=1000
+ARG USER_ID=1100
+ARG GROUP_ID=1100
 ARG PYTHON_VERSION=3.9
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -101,6 +101,8 @@ ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
 RUN set -ex \
 	&& groupadd --gid ${GROUP_ID} --system archivematica \
 	&& useradd --uid ${USER_ID} --gid ${GROUP_ID} --home-dir /var/archivematica --system archivematica \
+	&& groupadd --gid 1131635 lacddt \
+	&& usermod -a -G lacddt archivematica \
 	&& mkdir -p /var/archivematica/sharedDirectory \
 	&& mkdir -p /pyenv \
 	&& chown -R archivematica:archivematica /var/archivematica /pyenv

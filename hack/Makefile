@@ -4,8 +4,8 @@
 AM_PIPELINE_DATA ?= $(HOME)/.am/am-pipeline-data
 SS_LOCATION_DATA ?= $(HOME)/.am/ss-location-data
 
-CALLER_UID=1100
-CALLER_GID=1100
+CALLER_UID=$(shell id -u)
+CALLER_GID=$(shell id -g)
 
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../src)
 
