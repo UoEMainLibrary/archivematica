@@ -34,6 +34,7 @@ services:
       # These are used in the settings.testmysql modules
       MYSQL_USER: "archivematica"
       MYSQL_PASSWORD: "demo"
+    restart: always
     volumes:
       - "./etc/mysql/tuning.cnf:/etc/my.cnf.d/tuning.cnf:ro"
       - "mysql_data:/var/lib/mysql"
@@ -62,6 +63,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: always
     volumes:
       - "elasticsearch_data:/usr/share/elasticsearch/data"
     ports:
@@ -71,6 +73,7 @@ services:
     image: "artefactual/gearmand:1.1.18-alpine"
     command: "--queue-type=builtin"
     user: "gearman"
+    restart: always
     ports:
       - "127.0.0.1:62004:4730"
 
@@ -79,6 +82,7 @@ services:
     user: ${USER_ID:-1000}
     ports:
       - "127.0.0.1:62005:2113"
+    restart: always
     volumes:
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"  # Read and write needed!
 
@@ -90,11 +94,13 @@ services:
       CLAMAV_MAX_STREAM_LENGTH: "100"
     ports:
       - "127.0.0.1:62006:3310"
+    restart: always
     volumes:
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:ro"
 
   nginx:
     image: "nginx:stable-alpine"
+    restart: always
     volumes:
       - "./etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro"
       - "./etc/nginx/conf.d/archivematica.conf:/etc/nginx/conf.d/archivematica.conf:ro"
@@ -126,6 +132,7 @@ services:
       ARCHIVEMATICA_MCPSERVER_SEARCH_ENABLED: "${AM_SEARCH_ENABLED:-true}"
       ARCHIVEMATICA_MCPSERVER_MCPSERVER_PROMETHEUS_BIND_PORT: "7999"
       ARCHIVEMATICA_MCPSERVER_MCPSERVER_PROMETHEUS_BIND_ADDRESS: "0.0.0.0"
+    restart: always  
     volumes:
       - "../:/src"
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"
@@ -165,6 +172,7 @@ services:
       ARCHIVEMATICA_MCPCLIENT_MCPCLIENT_PROMETHEUS_BIND_ADDRESS: "0.0.0.0"
       ARCHIVEMATICA_MCPCLIENT_MCPCLIENT_METADATA_XML_VALIDATION_ENABLED: "true"
       METADATA_XML_VALIDATION_SETTINGS_FILE: "/src/hack/submodules/archivematica-sampledata/xml-validation/xml_validation.py"
+    restart: always
     volumes:
       - "../:/src"
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"
@@ -200,6 +208,7 @@ services:
       ARCHIVEMATICA_DASHBOARD_CLIENT_HOST: "mysql"
       ARCHIVEMATICA_DASHBOARD_CLIENT_DATABASE: "MCP"
       ARCHIVEMATICA_DASHBOARD_SEARCH_ENABLED: "${AM_SEARCH_ENABLED:-true}"
+    restart: always  
     volumes:
       - "../:/src"
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"
@@ -231,6 +240,7 @@ services:
       SS_DB_URL: "mysql://archivematica:demo@mysql/SS"
       SS_GNUPG_HOME_PATH: "/var/archivematica/storage_service/.gnupg"
       SS_PROMETHEUS_ENABLED: "true"
+    restart: always  
     volumes:
       - "./submodules/archivematica-storage-service/:/src/"
       - "./submodules/archivematica-sampledata/:/home/archivematica/archivematica-sampledata/:ro"
