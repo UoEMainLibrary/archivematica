@@ -34,7 +34,7 @@ services:
       # These are used in the settings.testmysql modules
       MYSQL_USER: "archivematica"
       MYSQL_PASSWORD: "demo"
-    restart: always  
+    restart: always
     volumes:
       - "./etc/mysql/tuning.cnf:/etc/my.cnf.d/tuning.cnf:ro"
       - "mysql_data:/var/lib/mysql"
@@ -63,7 +63,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    restart: always  
+    restart: always
     volumes:
       - "elasticsearch_data:/usr/share/elasticsearch/data"
     ports:
@@ -82,7 +82,7 @@ services:
     user: ${USER_ID:-1000}
     ports:
       - "127.0.0.1:62005:2113"
-    restart: always    
+    restart: always
     volumes:
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"  # Read and write needed!
 
@@ -94,7 +94,7 @@ services:
       CLAMAV_MAX_STREAM_LENGTH: "100"
     ports:
       - "127.0.0.1:62006:3310"
-    restart: always    
+    restart: always
     volumes:
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:ro"
 
@@ -172,7 +172,7 @@ services:
       ARCHIVEMATICA_MCPCLIENT_MCPCLIENT_PROMETHEUS_BIND_ADDRESS: "0.0.0.0"
       ARCHIVEMATICA_MCPCLIENT_MCPCLIENT_METADATA_XML_VALIDATION_ENABLED: "true"
       METADATA_XML_VALIDATION_SETTINGS_FILE: "/src/hack/submodules/archivematica-sampledata/xml-validation/xml_validation.py"
-    restart: always  
+    restart: always
     volumes:
       - "../:/src"
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"
@@ -246,6 +246,8 @@ services:
       - "./submodules/archivematica-sampledata/:/home/archivematica/archivematica-sampledata/:ro"
       - "archivematica_pipeline_data:/var/archivematica/sharedDirectory:rw"
       - "archivematica_storage_service_staging_data:/var/archivematica/storage_service:rw"
+      - "/home/lib/lacddt/StorageService:/myStorage:rw"
+      - "/home/lib/lacddt/.ssh:/var/archivematica/.ssh:ro"
       - "archivematica_storage_service_location_data:/home:rw"
     links:
       - "mysql"

@@ -1,0 +1,20 @@
+Fixed storage service port 8000 and added trusted csrf for storage service
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Committer: lacddt <lacddt@lac-archivematica-live2.is.ed.ac.uk>
+#
+# On branch fix403
+# Your branch is up to date with 'origin/fix403'.
+#
+# Changes to be committed:
+#	modified:   ../../../../hack/etc/nginx/conf.d/archivematica.conf
+#	modified:   base.py
+#
+# Changes not staged for commit:
+#	modified:   ../../../../hack/docker-compose.yml
+#
+# Untracked files:
+#	../../../../hack/etc/nginx/conf.d/index.html
+#	../../../../hack/etc/nginx/conf.d/index.html.1
+#
