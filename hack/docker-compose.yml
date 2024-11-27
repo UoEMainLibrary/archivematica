@@ -248,6 +248,6 @@ services:
       - "archivematica_storage_service_staging_data:/var/archivematica/storage_service:rw"
       - "/home/lib/lacddt/StorageService:/myStorage:rw"
       - "/home/lib/lacddt/.ssh:/var/archivematica/.ssh:ro"
-      - "archivematica_storage_service_location_data:/home:rw"
+      - "/data/lac-store:/home:rw"
     links:
       - "mysql"
