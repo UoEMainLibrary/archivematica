@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Archivematica.    If not, see <http://www.gnu.org/licenses/>.
 import argparse
+import json
 import logging
 import os
 import uuid
@@ -28,6 +29,8 @@ from lxml import etree
 
 django.setup()
 import metsrw
+from metsrw.label import SimpleDMD
+from metsrw.dmdsecs import DMDSection
 
 # archivematicaCommon
 from archivematicaFunctions import get_dashboard_uuid
@@ -97,6 +100,51 @@ def write_mets(mets_path, transfer_dir_path, base_path_placeholder, transfer_uui
 
     mets.append_file(fsentry_tree.root_node)
     mets.write(mets_path, pretty_print=True)
+    metadata_json_path = os.path.join(transfer_dir_path, "metadata.json")
+    if os.path.isfile(metadata_json_path):
+        with open(metadata_json_path) as f:
+            metadata_entries = json.load(f)
+
+        for entry in metadata_entries:
+            dc_elements = {k: v for k, v in entry.items() if k.startswith("dc.")}
+
+            if not dc_elements:
+                continue
+
+            # Find first existing dmdSec with dc metadata (we assume there's at least one)
+            dc_dmdsecs = [
+                dmd for dmd in mets.dmdsecs if isinstance(dmd.label, SimpleDMD)
+            ]
+            if not dc_dmdsecs:
+                # No existing DC section; create one
+                dmd = SimpleDMD()
+                mets.dmdsecs.append(DMDSection(dmd))
+                dc_dmdsecs = [mets.dmdsecs[-1]]
+
+            # Merge into the first dc section
+            existing_dmd = dc_dmdsecs[0].label
+            # Convert to a dict for merging
+            dc_dict = existing_dmd.to_dict()
+
+            for k, v in dc_elements.items():
+                tag = k.split("dc.")[-1]
+                if isinstance(v, list):
+                    dc_dict[tag] = v
+                else:
+                    dc_dict[tag] = [v]
+
+            # Replace the old label with a new one
+            new_dmd = SimpleDMD()
+            for tag, values in dc_dict.items():
+                for value in values:
+                    new_dmd.add_dc_element(tag, value)
+            dc_dmdsecs[0].label = new_dmd
+
+        # Rewrite the METS with merged metadata
+        mets.write(mets_path, pretty_print=True)
+
+        # Delete the metadata.json
+        os.remove(metadata_json_path)
 
 
 def convert_to_premis_hash_function(hash_type):
