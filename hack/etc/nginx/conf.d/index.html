@@ -1,0 +1,142 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en" >
+  <head>
+    <title>Archivematica Dashboard - </title>
+    <meta charset="utf-8">
+    <link rel="shortcut icon" href="/media/images/favicon.ico" />
+    <link href="/media/vendor/jquery-ui/jquery-ui.css" rel="stylesheet" type="text/css" />
+    <link href="/media/vendor/twitter-bootstrap/css/bootstrap.css" rel="stylesheet" type="text/css" />
+    <link href="/media/vendor/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css" />
+    <link href="/media/css/style.css" rel="stylesheet" type="text/css" />
+    
+    <script src="/jsi18n/" type="text/javascript"></script>
+    <script src="/media/vendor/jquery.js" type="text/javascript"></script>
+    <script src="/media/vendor/twitter-bootstrap/js/bootstrap.js" type="text/javascript"></script>
+    <script src="/media/vendor/jquery-ui/jquery-ui.js" type="text/javascript"></script>
+    <script src="/media/vendor/jquery.idle-timer.js" type="text/javascript"></script>
+    <script src="/media/vendor/underscore.js" type="text/javascript"></script>
+    <script src="/media/vendor/backbone.js" type="text/javascript"></script>
+    <script src="/media/js/status.js" type="text/javascript"></script>
+    <script src="/media/js/misc.js" type="text/javascript"></script>
+    
+    <script type="text/javascript">
+      window.DashboardConfig = {
+        'currentLanguage': 'en'
+      };
+    </script>
+  </head>
+  <body id="page-default">
+
+    
+
+    
+
+      <div class="container">
+
+        <div class="content">
+          
+
+
+          
+
+  <div id="login">
+
+    <h1><a href="http://www.archivematica.org">Archivematica</a></h1>
+
+    <form class="form-stacked" method="post" action="/administration/accounts/login/">
+
+      <input type="hidden" name="csrfmiddlewaretoken" value="YxfdXAFXdSsFkmnwHeWV5TU5COO06UahTqgLUA0BUApPVtIwVvL6s8dOUcM4GROi">
+
+      <div class="fields">
+        
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+    <div id="div_id_username" class="form-group  ">
+
+        
+            <label for="id_username" class="control-label required-field ">
+                Username
+            </label>
+        
+
+        
+        
+        
+            
+                <div class="">
+                    <input type="text" name="username" autofocus autocapitalize="none" autocomplete="username" maxlength="150" class=" form-control" required id="id_username">
+                    
+                    
+                </div>
+            
+        
+    </div>
+
+
+
+    
+
+
+    <div id="div_id_password" class="form-group  ">
+
+        
+            <label for="id_password" class="control-label required-field ">
+                Password
+            </label>
+        
+
+        
+        
+        
+            
+                <div class="">
+                    <input type="password" name="password" autocomplete="current-password" class=" form-control" required id="id_password">
+                    
+                    
+                </div>
+            
+        
+    </div>
+
+
+
+
+
+      </div>
+
+      <div class="actions">
+        <a id="forgot-password" style="display: none;" href="/administration/accounts/login/">Forgot your password?</a>
+        <button class="btn btn-primary" type="submit">Log in</button>
+      </div>
+
+    </form>
+
+    
+  </div>
+
+
+
+        </div>
+
+      </div>
+
+    
+
+    
+  </body>
+</html>

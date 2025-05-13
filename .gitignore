@@ -28,3 +28,10 @@ src/archivematica/dashboard/media/js/build
 
 # setuptools build
 **/*.egg-info
+
+#ones including unique URLs
+.gitmodules
+hack/etc/nginx/conf.d/archivematica.conf
+src/archivematica/dashboard/settings/base.py
+hack/submodules/archivematica-storage-service
+
