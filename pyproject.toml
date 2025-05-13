@@ -1,0 +1,193 @@
+[build-system]
+requires = ["setuptools>=74", "wheel>=0.44"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name="archivematica"
+description="Web- and standards-based, open-source application which allows your institution to preserve long-term access to trustworthy, authentic and reliable digital content."
+requires-python = ">=3.9"
+authors = [
+  {name = "Artefactual Systems Inc.", email = "info@artefactual.com"},
+]
+maintainers = [
+  {name = "Artefactual Systems Inc.", email = "info@artefactual.com"},
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+dynamic = [
+  "version",
+]
+
+[project.urls]
+homepage = "https://www.archivematica.org/"
+documentation = "https://www.archivematica.org/en/docs/archivematica-latest/"
+repository = "https://github.com/artefacutal/archivematica"
+issues = "https://github.com/archivematica/Issues/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["archivematica*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "archivematica.archivematicaCommon.version.get_full_version"}
+
+[tool.pytest.ini_options]
+addopts = "--reuse-db -p no:cacheprovider"
+DJANGO_SETTINGS_MODULE="settings.test"
+norecursedirs = ".svn _build tmp* node_modules bower_components share .tox"
+
+[tool.coverage.run]
+omit = [
+    "**/src/archivematica/archivematicaCommon/externals/*",
+    "**/migrations/*",
+    "**/settings/*",
+    "**/tests/*",
+    "**/wsgi.py",
+    "**/manage.py",
+]
+include = [
+    "**/src/archivematica/archivematicaCommon/*",
+    "**/src/archivematica/dashboard/*",
+    "**/src/archivematica/MCPClient/*",
+    "**/src/archivematica/MCPClient/clientScripts/*",
+    "**/src/archivematica/MCPServer/*",
+]
+branch = true
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+# Rule reference: https://docs.astral.sh/ruff/rules/
+select = [
+    "B",
+    "C4",
+    "E",
+    "F",
+    "I",
+    "UP",
+    "W",
+]
+ignore = [
+    "B018",
+    "B904",
+    "E402",
+    "E501",
+    "UP031",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/archivematica/*/settings/*" = ["F403"]
+"src/archivematica/dashboard/settings/*" = ["F405"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.mypy]
+explicit_package_bases = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "src.archivematica.archivematicaCommon.executeOrRunSubProcess",
+    "src.archivematica.MCPClient.client.*",
+    "src.archivematica.MCPClient.clientScripts.characterize_file",
+    "src.archivematica.MCPClient.clientScripts.has_packages",
+    "src.archivematica.MCPClient.clientScripts.identify_file_format",
+    "src.archivematica.MCPClient.clientScripts.normalize",
+    "src.archivematica.MCPClient.clientScripts.policy_check",
+    "src.archivematica.MCPClient.clientScripts.transcribe_file",
+    "src.archivematica.MCPClient.clientScripts.validate_file",
+    "tests.archivematicaCommon.test_execute_functions",
+    "tests.dashboard.components.accounts.test_views",
+    "tests.dashboard.components.administration.test_administration",
+    "tests.dashboard.fpr.test_command_get_fpr_changes",
+    "tests.dashboard.fpr.test_command_import_pronom_ids",
+    "tests.dashboard.fpr.test_views",
+    "tests.dashboard.test_oidc",
+    "tests.integration.test_oidc_auth",
+    "tests.MCPClient.conftest",
+    "tests.MCPClient.test_characterize_file",
+    "tests.MCPClient.test_create_mets_v2",
+    "tests.MCPClient.test_fpr_commands",
+    "tests.MCPClient.test_has_packages",
+    "tests.MCPClient.test_identify_file_format",
+    "tests.MCPClient.test_normalize",
+    "tests.MCPClient.test_policy_check",
+    "tests.MCPClient.test_transcribe_file",
+    "tests.MCPClient.test_validate_file",
+]
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+strict_equality = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    envlist =
+        archivematica-common
+        dashboard
+        mcp-server
+        mcp-client
+        storage-service
+        migrations-dashboard
+        migrations-storage-service
+        linting
+
+    [testenv]
+    package = editable
+    deps = -r{toxinidir}/requirements-dev.txt
+    commands = py.test {posargs}
+    allowlist_externals =
+        bash
+        find
+    setenv =
+        # General
+        LOGNAME = user
+        DJANGO_SETTINGS_MODULE = {env:DJANGO_SETTINGS_MODULE:settings.test}
+        PYTEST_ADDOPTS = {env:PYTEST_ADDOPTS:}
+        HACK_DIR = {toxinidir}/hack
+        # Storage Service
+        STORAGE_SERVICE_ROOT = {env:HACK_DIR}/submodules/archivematica-storage-service
+        # TOXENV-specific
+        # Setting HOME prevents Python's pwd module to ask for a real uid inside
+        # the container, and using {temp_dir} allows caching the pre-commit
+        # dependencies in the tox host
+        linting: HOME = {temp_dir}/user
+    changedir =
+        archivematica-common: {toxinidir}/tests/archivematicaCommon
+        dashboard: {toxinidir}/tests/dashboard
+        mcp-server: {toxinidir}/tests/MCPServer
+        mcp-client: {toxinidir}/tests/MCPClient
+        storage-service: {env:STORAGE_SERVICE_ROOT}
+
+    [testenv:storage-service]
+    deps =
+        -r{env:STORAGE_SERVICE_ROOT}/requirements-dev.txt
+    commands =
+        pip install -e {env:STORAGE_SERVICE_ROOT}
+        {[testenv]commands}
+
+    [testenv:migrations-dashboard]
+    commands = django-admin makemigrations --check --dry-run
+
+    [testenv:migrations-storage-service]
+    deps = {[testenv:storage-service]deps}
+    commands =
+        pip install -e {env:STORAGE_SERVICE_ROOT}
+        {[testenv:migrations-dashboard]commands}
+
+    [testenv:linting]
+    basepython = python3
+    deps = pre-commit
+    commands = pre-commit run --all-files --show-diff-on-failure
+"""

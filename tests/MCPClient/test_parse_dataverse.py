@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 """Tests for the parse Dataverse functionality in Archivematica."""
+
 import os
 
 import metsrw
-import parse_dataverse_mets as parse_dataverse
-from client.job import Job
 from django.test import TestCase
-from main import models
+
+from archivematica.dashboard.main import models
+from archivematica.MCPClient.client.job import Job
+from archivematica.MCPClient.clientScripts import (
+    parse_dataverse_mets as parse_dataverse,
+)
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 

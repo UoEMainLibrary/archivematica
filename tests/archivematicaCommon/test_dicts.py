@@ -1,10 +1,10 @@
 import os
 
 import pytest
-from dicts import ChoicesDict
-from dicts import ReplacementDict
-from dicts import setup as setup_dicts
-from main import models
+
+from archivematica.archivematicaCommon.dicts import ReplacementDict
+from archivematica.archivematicaCommon.dicts import setup as setup_dicts
+from archivematica.dashboard.main import models
 
 
 @pytest.fixture
@@ -46,21 +46,6 @@ def with_dicts():
         watch_directory="/watch/",
         rejected_directory="/rejected/",
     )
-
-
-def test_alternate_replacementdict_constructor():
-    """
-    This constructor allows serialized Python strings to be expanded
-    into ReplacementDict instances.
-    """
-
-    d = {"foo": "bar"}
-    assert ReplacementDict(d) == ReplacementDict.fromstring(str(d))
-
-
-def test_alternate_choicesdict_constructor():
-    d = {"foo": "bar"}
-    assert ChoicesDict(d) == ChoicesDict.fromstring(str(d))
 
 
 def test_replacementdict_replace():
@@ -123,6 +108,31 @@ def test_replacementdict_model_constructor_file_only(FILE):
     assert rd["%fileGrpUse%"] == FILE.filegrpuse
 
 
-def test_replacementdict_options():
-    d = ReplacementDict({"%relativeLocation%": "bar"})
-    assert d.to_gnu_options() == ["--relative-location=bar"]
+@pytest.mark.parametrize(
+    "replacementdict_key, regex_key_value",
+    [
+        ("%relativeLocation%", "--relative-location=bar"),
+        ("%SIPUUID%", "--sipuuid=bar"),
+        ("%SIPName%", "--sip-name=bar"),
+        ("%fileUUID%", "--file-uuid=bar"),
+        ("%SIPDirectoryBasename%", "--sip-directory-basename=bar"),
+        ("%SIPLogsDirectory%", "--sip-logs-directory=bar"),
+        ("%sipLogs%", "--sip-logs=bar"),
+        ("%outputLocation%", "--output-location=bar"),
+        ("%TransferDirectory%", "--transfer-directory=bar"),
+    ],
+    ids=[
+        "relative-location",
+        "sipuuid",
+        "sipname",
+        "fileuuid",
+        "sip-directory-basename",
+        "sip-logs-directory",
+        "sip-logs",
+        "output-location",
+        "transfer-directory",
+    ],
+)
+def test_replacementdict_options(replacementdict_key, regex_key_value):
+    d = ReplacementDict({replacementdict_key: "bar"})
+    assert d.to_gnu_options() == [regex_key_value]

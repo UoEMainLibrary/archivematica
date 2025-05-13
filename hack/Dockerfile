@@ -1,11 +1,13 @@
 ARG TARGET=archivematica-mcp-server
-ARG UBUNTU_VERSION=22.04
+ARG UBUNTU_VERSION=24.04
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG PYTHON_VERSION=3.9
 ARG NODE_VERSION=20
 ARG PYENV_DIR=/pyenv
 ARG SELENIUM_DIR=/selenium
+ARG MEDIAAREA_VERSION=1.0-25
+ARG JHOVE_VERSION=1.32.1-1~22.04
 
 # -----------------------------------------------------------------------------
 
@@ -13,8 +15,15 @@ FROM ubuntu:${UBUNTU_VERSION} AS base-builder
 
 ARG PYENV_DIR=/pyenv
 
-ENV DEBIAN_FRONTEND noninteractive
-ENV PYTHONUNBUFFERED 1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Ubuntu 24.04 and later Docker images include a default user with UID (1000)
+# and GID (1000). Remove this user to prevent conflicts with the USER_ID and
+# GROUP_ID build arguments.
+RUN set -ex \
+	&& id -u ubuntu >/dev/null 2>&1 \
+	&& userdel --remove ubuntu || true
 
 RUN set -ex \
 	&& apt-get update \
@@ -28,14 +37,15 @@ RUN set -ex \
 		libsasl2-dev \
 		libsqlite3-dev \
 		locales \
+		make \
 		pkg-config \
 		tzdata \
 	&& rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 ENV PYENV_ROOT=${PYENV_DIR}/data
 ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
@@ -92,7 +102,8 @@ RUN set -ex \
 	&& SELENIUM_CACHE=${SELENIUM_DIR}/cache \
 	&& SELENIUM_BIN=${SELENIUM_DIR}/bin \
 	&& mkdir -p $SELENIUM_CACHE $SELENIUM_BIN \
-	&& curl -o $SELENIUM_BIN/selenium-manager -L https://github.com/SeleniumHQ/selenium/raw/selenium-4.16.0/common/manager/linux/selenium-manager \
+	&& SELENIUM_MANAGER_DOWNLOAD_URL=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/SeleniumHQ/selenium_manager_artifacts/releases/latest | sed -e 's|/tag/\(.*\)|/download/\1/selenium-manager-linux|g') \
+	&& curl -o $SELENIUM_BIN/selenium-manager -L $SELENIUM_MANAGER_DOWNLOAD_URL \
 	&& chmod +x $SELENIUM_BIN/selenium-manager \
 	&& CHROME_OUTPUT=$($SELENIUM_BIN/selenium-manager --cache-path $SELENIUM_CACHE --browser chrome --output JSON) \
 	&& FIREFOX_OUTPUT=$($SELENIUM_BIN/selenium-manager --cache-path $SELENIUM_CACHE --browser firefox --output JSON) \
@@ -105,17 +116,19 @@ RUN set -ex \
 
 FROM node:${NODE_VERSION} AS archivematica-dashboard-frontend-builder
 
-COPY --link src/dashboard/frontend /src/src/dashboard/frontend
+COPY --link src/archivematica/dashboard/frontend /src/src/archivematica/dashboard/frontend
 
-WORKDIR /src/src/dashboard/frontend
+WORKDIR /src/src/archivematica/dashboard/frontend
 
 RUN set ex \
-	&& npm install --no-package-lock
+	&& npm ci
 
 # -----------------------------------------------------------------------------
 
 FROM node:${NODE_VERSION} AS archivematica-dashboard-testing
 
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 ARG SELENIUM_DIR=/selenium
 ENV PATH=${SELENIUM_DIR}/bin:$PATH
 
@@ -135,26 +148,29 @@ RUN set -ex \
 	&& rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 COPY --chown=${USER_ID}:${GROUP_ID} --from=browsers-builder --link ${SELENIUM_DIR} ${SELENIUM_DIR}
-COPY --chown=${USER_ID}:${GROUP_ID} --from=archivematica-dashboard-frontend-builder --link /src/src/dashboard/frontend/node_modules /src/src/dashboard/frontend/node_modules
-COPY --link src/dashboard/frontend /src/src/dashboard/frontend
+COPY --chown=${USER_ID}:${GROUP_ID} --from=archivematica-dashboard-frontend-builder --link /src/src/archivematica/dashboard/frontend/node_modules /src/src/archivematica/dashboard/frontend/node_modules
+COPY --link src/archivematica/dashboard/frontend /src/src/archivematica/dashboard/frontend
 
-WORKDIR /src/src/dashboard/frontend
+WORKDIR /src/src/archivematica/dashboard/frontend
 
 ENTRYPOINT ["npm", "run", "test-single-run"]
 
 # -----------------------------------------------------------------------------
 
-FROM base-builder as base
+FROM base-builder AS base
 
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG PYENV_DIR=/pyenv
+ARG MEDIAAREA_VERSION
+ARG JHOVE_VERSION
 
 RUN set -ex \
-	&& curl --retry 3 -fsSL https://packages.archivematica.org/1.16.x/key.asc | gpg --dearmor -o /etc/apt/keyrings/archivematica-1.16.x.gpg \
-	&& echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/archivematica-1.16.x.gpg] http://packages.archivematica.org/1.16.x/ubuntu-externals jammy main" > /etc/apt/sources.list.d/archivematica-external.list \
-	&& curl --retry 3 -so /tmp/repo-mediaarea_1.0-21_all.deb -L https://mediaarea.net/repo/deb/repo-mediaarea_1.0-21_all.deb \
-	&& dpkg -i /tmp/repo-mediaarea_1.0-21_all.deb \
+	&& curl --retry 3 -fsSL https://packages.archivematica.org/1.18.x/key.asc | gpg --dearmor -o /etc/apt/keyrings/archivematica-1.18.x.gpg \
+	&& echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/archivematica-1.18.x.gpg] http://packages.archivematica.org/1.18.x/ubuntu-externals jammy main" > /etc/apt/sources.list.d/archivematica-external.list \
+	&& curl --retry 3 -so /tmp/repo-mediaarea.deb -L https://mediaarea.net/repo/deb/repo-mediaarea_${MEDIAAREA_VERSION}_all.deb \
+	&& dpkg -i /tmp/repo-mediaarea.deb \
+	&& rm /tmp/repo-mediaarea.deb \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		atool \
@@ -162,7 +178,6 @@ RUN set -ex \
 		clamav \
 		coreutils \
 		ffmpeg \
-		fits \
 		g++ \
 		gcc \
 		gearman \
@@ -171,7 +186,7 @@ RUN set -ex \
 		hashdeep \
 		imagemagick \
 		inkscape \
-		jhove \
+		jhove=${JHOVE_VERSION} \
 		libffi-dev \
 		libimage-exiftool-perl \
 		libldap2-dev \
@@ -184,7 +199,6 @@ RUN set -ex \
 		md5deep \
 		mediaconch \
 		mediainfo \
-		nailgun \
 		nfs-common \
 		openjdk-8-jre-headless \
 		p7zip-full \
@@ -215,31 +229,31 @@ USER archivematica
 COPY --chown=${USER_ID}:${GROUP_ID} --from=pyenv-builder --link ${PYENV_DIR} ${PYENV_DIR}
 COPY --chown=${USER_ID}:${GROUP_ID} --link . /src
 
+ENV PYTHONPATH=/src/src
+
 # -----------------------------------------------------------------------------
 
 FROM base AS archivematica-mcp-client
 
-ENV DJANGO_SETTINGS_MODULE settings.common
-ENV PYTHONPATH /src/src/MCPClient/lib/:/src/src/MCPClient/lib/clientScripts:/src/src/archivematicaCommon/lib/:/src/src/dashboard/src/
-ENV ARCHIVEMATICA_MCPCLIENT_ARCHIVEMATICACLIENTMODULES /src/src/MCPClient/lib/archivematicaClientModules
-ENV ARCHIVEMATICA_MCPCLIENT_CLIENTASSETSDIRECTORY /src/src/MCPClient/lib/assets/
-ENV ARCHIVEMATICA_MCPCLIENT_CLIENTSCRIPTSDIRECTORY /src/src/MCPClient/lib/clientScripts/
+ENV DJANGO_SETTINGS_MODULE=archivematica.MCPClient.settings.common
+ENV ARCHIVEMATICA_MCPCLIENT_ARCHIVEMATICACLIENTMODULES=/src/src/archivematica/MCPClient/archivematicaClientModules
+ENV ARCHIVEMATICA_MCPCLIENT_CLIENTASSETSDIRECTORY=/src/src/archivematica/MCPClient/assets/
+ENV ARCHIVEMATICA_MCPCLIENT_CLIENTSCRIPTSDIRECTORY=/src/src/archivematica/MCPClient/clientScripts/
 
 # Some scripts in archivematica-fpr-admin executed by MCPClient rely on certain
 # files being available in this image (e.g. see https://git.io/vA1wF).
-COPY --link src/archivematicaCommon/lib/externals/fido/ /usr/lib/archivematica/archivematicaCommon/externals/fido/
-COPY --link src/archivematicaCommon/lib/externals/fiwalk_plugins/ /usr/lib/archivematica/archivematicaCommon/externals/fiwalk_plugins/
+COPY --link src/archivematica/archivematicaCommon/externals/fido/ /usr/lib/archivematica/archivematicaCommon/externals/fido/
+COPY --link src/archivematica/archivematicaCommon/externals/fiwalk_plugins/ /usr/lib/archivematica/archivematicaCommon/externals/fiwalk_plugins/
 
-ENTRYPOINT ["pyenv", "exec", "python3", "/src/src/MCPClient/lib/archivematicaClient.py"]
+ENTRYPOINT ["pyenv", "exec", "python3", "-m", "archivematica.MCPClient.archivematicaClient"]
 
 # -----------------------------------------------------------------------------
 
 FROM base AS archivematica-mcp-server
 
-ENV DJANGO_SETTINGS_MODULE settings.common
-ENV PYTHONPATH /src/src/MCPServer/lib/:/src/src/archivematicaCommon/lib/:/src/src/dashboard/src/
+ENV DJANGO_SETTINGS_MODULE=archivematica.MCPServer.settings.common
 
-ENTRYPOINT ["pyenv", "exec", "python3", "/src/src/MCPServer/lib/archivematicaMCP.py"]
+ENTRYPOINT ["pyenv", "exec", "python3", "-m", "archivematica.MCPServer.archivematicaMCP"]
 
 # -----------------------------------------------------------------------------
 
@@ -253,38 +267,50 @@ USER root
 
 RUN set -ex \
 	&& internalDirs=' \
-		/src/src/dashboard/frontend \
-		/src/src/dashboard/src/static \
-		/src/src/dashboard/src/media \
+		/src/src/archivematica/dashboard/frontend \
+		/src/src/archivematica/dashboard/static \
+		/src/src/archivematica/dashboard/media \
 	' \
 	&& mkdir -p $internalDirs \
 	&& chown -R archivematica $internalDirs
 
 USER archivematica
 
-COPY --chown=${USER_ID}:${GROUP_ID} --from=archivematica-dashboard-frontend-builder --link /src/src/dashboard/src/media/js/ /src/src/dashboard/src/media/js
+COPY --chown=${USER_ID}:${GROUP_ID} --from=archivematica-dashboard-frontend-builder --link /src/src/archivematica/dashboard/media/js/ /src/src/archivematica/dashboard/media/js
 
-WORKDIR /src/src/dashboard/src
-
-ENV DJANGO_SETTINGS_MODULE settings.local
-ENV PYTHONPATH /src/src/dashboard/src/:/src/src/archivematicaCommon/lib/
-ENV AM_GUNICORN_BIND 0.0.0.0:8000
-ENV AM_GUNICORN_CHDIR /src/src/dashboard/src
-ENV FORWARDED_ALLOW_IPS *
+ENV DJANGO_SETTINGS_MODULE=archivematica.dashboard.settings.local
+ENV AM_GUNICORN_BIND=0.0.0.0:8000
+ENV AM_GUNICORN_CHDIR=/src/src/archivematica/dashboard
+ENV FORWARDED_ALLOW_IPS=*
 
 RUN set -ex \
-	&& ./manage.py collectstatic --noinput --clear \
-	&& ./manage.py compilemessages
+	&& python3 -m archivematica.dashboard.manage collectstatic --noinput --clear \
+	&& python3 -m archivematica.dashboard.manage compilemessages
 
-ENV DJANGO_SETTINGS_MODULE settings.production
+ENV DJANGO_SETTINGS_MODULE=archivematica.dashboard.settings.production
 
 EXPOSE 8000
 
-ENTRYPOINT ["pyenv", "exec", "python3", "-m", "gunicorn", "--config=/src/src/dashboard/install/dashboard.gunicorn-config.py", "wsgi:application"]
+ENTRYPOINT ["pyenv", "exec", "python3", "-m", "gunicorn", "--config=/src/src/archivematica/dashboard/install/dashboard.gunicorn-config.py", "wsgi:application"]
 
 # -----------------------------------------------------------------------------
 
 FROM base AS archivematica-tests
+
+# -----------------------------------------------------------------------------
+
+FROM base AS archivematica-dashboard-integration-tests
+
+USER root
+
+RUN set -ex \
+	&& python3 -m playwright install-deps firefox
+
+USER archivematica
+
+RUN set -ex \
+	&& mkdir -p /var/archivematica/.cache/ms-playwright \
+	&& python3 -m playwright install firefox
 
 # -----------------------------------------------------------------------------
 

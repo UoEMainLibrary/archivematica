@@ -1,10 +1,12 @@
 import uuid
+from unittest import mock
 
 import pytest
-from components import helpers
 from django.urls import reverse
 from django.utils import timezone
-from main import models
+
+from archivematica.dashboard.components import helpers
+from archivematica.dashboard.main import models
 
 
 @pytest.fixture()
@@ -59,8 +61,11 @@ class TestMarkHiddenView:
         assert resp.status_code == 409
         assert resp.json() == {"removed": False}
 
-    def test_it_handles_unknown_errors(self, install, admin_client, transfer, mocker):
-        mocker.patch("main.models.Transfer.objects.done", side_effect=Exception())
+    @mock.patch(
+        "archivematica.dashboard.main.models.Transfer.objects.done",
+        side_effect=Exception(),
+    )
+    def test_it_handles_unknown_errors(self, done, install, admin_client, transfer):
         url = reverse(
             "unit:mark_hidden",
             kwargs={"unit_type": "transfer", "unit_uuid": transfer.pk},
@@ -95,10 +100,13 @@ class TestMarkCompletedHiddenView:
 
         assert resp.status_code == 405
 
-    def test_it_handles_unknown_errors(self, install, admin_client, transfer, mocker):
-        mocker.patch(
-            "components.helpers.completed_units_efficient", side_effect=Exception()
-        )
+    @mock.patch(
+        "archivematica.dashboard.components.helpers.completed_units_efficient",
+        side_effect=Exception(),
+    )
+    def test_it_handles_unknown_errors(
+        self, completed_units_efficient, install, admin_client, transfer
+    ):
         url = reverse("unit:mark_all_hidden", kwargs={"unit_type": "transfer"})
         resp = admin_client.delete(url)
 

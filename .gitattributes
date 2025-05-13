@@ -1,11 +1,11 @@
 *.py ident
 *.sh ident
-src/dashboard/frontend/app/locale/*.po linguist-generated=true
-src/dashboard/frontend/app/locale/*.pot linguist-generated=true
-src/dashboard/frontend/app/locale/translations.json linguist-generated=true
-src/dashboard/frontend/package-lock.json linguist-generated=true
+src/archivematica/dashboard/frontend/app/locale/*.po linguist-generated=true
+src/archivematica/dashboard/frontend/app/locale/*.pot linguist-generated=true
+src/archivematica/dashboard/frontend/app/locale/translations.json linguist-generated=true
+src/archivematica/dashboard/frontend/package-lock.json linguist-generated=true
 .gitmodules merge=ours
 hack/etc/nginx/conf.d/archivematica.conf merge=ours
-src/dashboard/src/settings/base.py merge=ours
+src/archivematica/dashboard/settings/base.py merge=ours
 hack/submodules/archivematica-storage-service=ours
 

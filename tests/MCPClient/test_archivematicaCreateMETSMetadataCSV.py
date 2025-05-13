@@ -2,7 +2,12 @@
 """
 Tests for CSV metadata management on the METS creation process
 """
-from archivematicaCreateMETSMetadataCSV import parseMetadataCSV
+
+from unittest import mock
+
+from archivematica.MCPClient.clientScripts.archivematicaCreateMETSMetadataCSV import (
+    parseMetadataCSV,
+)
 
 content_when_value_has_empty_strings = """
 filename,dc.title,dc.type,dc.type,Other metadata
@@ -18,9 +23,9 @@ objects/bar/,,Photograph,Still Image,All taken on a rainy day
 """.strip()
 
 
-def test_parseMetadataCSV_with_null_values(mocker, tmp_path):
+def test_parseMetadataCSV_with_null_values(tmp_path):
     """Applying testcases in parseMetadataCSV function"""
-    job = mocker.Mock()
+    job = mock.Mock()
     d = tmp_path / "sub"
     d.mkdir()
     p = d / "metadata.csv"
@@ -30,9 +35,9 @@ def test_parseMetadataCSV_with_null_values(mocker, tmp_path):
     assert (result["objects/bar"]["dc.type"]) == ["Photograph", "Still Image"]
 
 
-def test_parseMetadataCSV_with_column_has_no_values(mocker, tmp_path):
+def test_parseMetadataCSV_with_column_has_no_values(tmp_path):
     """Applying testcases in parseMetadataCSV function"""
-    job = mocker.Mock()
+    job = mock.Mock()
     d = tmp_path / "sub"
     d.mkdir()
     p = d / "metadata.csv"

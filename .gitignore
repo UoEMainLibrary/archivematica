@@ -23,12 +23,15 @@
 .tox/
 
 # frontend builds
-src/dashboard/src/static/
-src/dashboard/src/media/js/build
+src/archivematica/dashboard/static/
+src/archivematica/dashboard/media/js/build
+
+# setuptools build
+**/*.egg-info
 
 #ones including unique URLs
 .gitmodules
 hack/etc/nginx/conf.d/archivematica.conf
-src/dashboard/src/settings/base.py
+src/archivematica/dashboard/settings/base.py
 hack/submodules/archivematica-storage-service
 

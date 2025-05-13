@@ -2,15 +2,20 @@ import os
 import uuid
 from unittest import mock
 
-import fpr
-import parse_mets_to_db
 import pytest
-from client.job import Job
 from django.test import TestCase
 from lxml import etree
-from main import models
+
+from archivematica.dashboard import fpr
+from archivematica.dashboard.main import models
+from archivematica.MCPClient.client.job import Job
+from archivematica.MCPClient.clientScripts import parse_mets_to_db
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# This uses the same name as the pytest fixture in conftest and it can be
+# removed when these TestCase subclasses are converted into pytest tests.
+mcp_job = Job("stub", "stub", [])
 
 
 class TestParseDublinCore(TestCase):
@@ -23,7 +28,7 @@ class TestParseDublinCore(TestCase):
         """It should parse no DC if none is found."""
         sip_uuid = "d481580e-53b9-4a52-96db-baa969e78adc"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_no_metadata.xml"))
-        dc = parse_mets_to_db.parse_dc(Job("stub", "stub", []), sip_uuid, root)
+        dc = parse_mets_to_db.parse_dc(mcp_job, sip_uuid, root)
         assert dc is None
         assert (
             models.DublinCore.objects.filter(
@@ -36,7 +41,7 @@ class TestParseDublinCore(TestCase):
         """It should ignore file-level DC."""
         sip_uuid = "f35d2530-45eb-4eb1-aa09-fb30661e7dcd"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_only_file_dc.xml"))
-        dc = parse_mets_to_db.parse_dc(Job("stub", "stub", []), sip_uuid, root)
+        dc = parse_mets_to_db.parse_dc(mcp_job, sip_uuid, root)
         assert dc is None
         assert (
             models.DublinCore.objects.filter(
@@ -49,7 +54,7 @@ class TestParseDublinCore(TestCase):
         """It should parse a SIP-level DC if found."""
         sip_uuid = "eacbf65f-2528-4be0-8cb3-532f45fcdff8"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_sip_dc.xml"))
-        dc = parse_mets_to_db.parse_dc(Job("stub", "stub", []), sip_uuid, root)
+        dc = parse_mets_to_db.parse_dc(mcp_job, sip_uuid, root)
         assert dc
         assert models.DublinCore.objects.filter(
             metadataappliestoidentifier=sip_uuid
@@ -97,7 +102,7 @@ class TestParseDublinCore(TestCase):
         root = etree.parse(
             os.path.join(THIS_DIR, "fixtures", "mets_sip_and_file_dc.xml")
         )
-        dc = parse_mets_to_db.parse_dc(Job("stub", "stub", []), sip_uuid, root)
+        dc = parse_mets_to_db.parse_dc(mcp_job, sip_uuid, root)
         assert dc
         assert models.DublinCore.objects.filter(
             metadataappliestoidentifier=sip_uuid
@@ -124,7 +129,7 @@ class TestParseDublinCore(TestCase):
         root = etree.parse(
             os.path.join(THIS_DIR, "fixtures", "mets_multiple_sip_dc.xml")
         )
-        dc = parse_mets_to_db.parse_dc(Job("stub", "stub", []), sip_uuid, root)
+        dc = parse_mets_to_db.parse_dc(mcp_job, sip_uuid, root)
         assert dc
         assert models.DublinCore.objects.filter(
             metadataappliestoidentifier=sip_uuid
@@ -156,7 +161,7 @@ class TestParsePremisRights(TestCase):
         """It should parse no rights if none found."""
         sip_uuid = "d481580e-53b9-4a52-96db-baa969e78adc"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_no_metadata.xml"))
-        rights = parse_mets_to_db.parse_rights(Job("stub", "stub", []), sip_uuid, root)
+        rights = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights == []
         assert (
             models.RightsStatement.objects.filter(
@@ -172,9 +177,7 @@ class TestParsePremisRights(TestCase):
         """
         sip_uuid = "50d65db1-86cd-4579-80af-8d9c0dbd7fca"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_all_rights.xml"))
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="Copyright"
@@ -230,9 +233,7 @@ class TestParsePremisRights(TestCase):
         """It should parse license rights."""
         sip_uuid = "50d65db1-86cd-4579-80af-8d9c0dbd7fca"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_all_rights.xml"))
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="License"
@@ -271,9 +272,7 @@ class TestParsePremisRights(TestCase):
         """It should parse statute rights."""
         sip_uuid = "50d65db1-86cd-4579-80af-8d9c0dbd7fca"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_all_rights.xml"))
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="Statute"
@@ -319,9 +318,7 @@ class TestParsePremisRights(TestCase):
         pass
         sip_uuid = "50d65db1-86cd-4579-80af-8d9c0dbd7fca"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_all_rights.xml"))
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="Policy"
@@ -365,9 +362,7 @@ class TestParsePremisRights(TestCase):
         pass
         sip_uuid = "50d65db1-86cd-4579-80af-8d9c0dbd7fca"
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_all_rights.xml"))
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="Donor"
@@ -412,9 +407,7 @@ class TestParsePremisRights(TestCase):
         root = etree.parse(
             os.path.join(THIS_DIR, "fixtures", "mets_updated_rights.xml")
         )
-        rights_list = parse_mets_to_db.parse_rights(
-            Job("stub", "stub", []), sip_uuid, root
-        )
+        rights_list = parse_mets_to_db.parse_rights(mcp_job, sip_uuid, root)
         assert rights_list
         rights = models.RightsStatement.objects.get(
             metadataappliestoidentifier=sip_uuid, rightsbasis="Statute"
@@ -465,6 +458,10 @@ class TestParseFiles(TestCase):
     fixture_files = ["formats.json"]
     fixtures = [os.path.join(THIS_DIR, "fixtures", p) for p in fixture_files]
 
+    @pytest.fixture(autouse=True)
+    def set_sip_uuid(self, sip):
+        self.SIP_UUID = str(sip.uuid)
+
     def setUp(self):
         self.ORIG_INFO = {
             "uuid": "ae8d4290-fe52-4954-b72a-0f591bee2e2f",
@@ -506,8 +503,6 @@ class TestParseFiles(TestCase):
             "derivation": None,
             "derivation_event": None,
         }
-        self.SIP_UUID = "8a0cac37-e446-4fa7-9e96-062bf07ccd04"
-        models.SIP.objects.create(uuid=self.SIP_UUID, sip_type="AIP-REIN")
 
     def test_parse_file_info(self):
         """
@@ -515,7 +510,7 @@ class TestParseFiles(TestCase):
         It should attach derivation information to the original file.
         """
         root = etree.parse(os.path.join(THIS_DIR, "fixtures", "mets_no_metadata.xml"))
-        files = parse_mets_to_db.parse_files(Job("stub", "stub", []), root)
+        files = parse_mets_to_db.parse_files(mcp_job, root)
         assert len(files) == 3
         orig = files[0]
         assert orig["uuid"] == self.ORIG_INFO["uuid"]
@@ -558,7 +553,7 @@ class TestParseFiles(TestCase):
         root = etree.parse(
             os.path.join(THIS_DIR, "fixtures", "mets_superseded_techmd.xml")
         )
-        files = parse_mets_to_db.parse_files(Job("stub", "stub", []), root)
+        files = parse_mets_to_db.parse_files(mcp_job, root)
         assert len(files) == 3
         orig = files[0]
         assert orig["uuid"] == self.ORIG_INFO["uuid"]
@@ -671,34 +666,26 @@ class TestParseFiles(TestCase):
         )
 
 
-@pytest.fixture
-def sip(tmp_path):
-    sip_uuid = str(uuid.uuid4())
-    current_path = tmp_path / "my-sip"
-    current_path.mkdir()
-    return models.SIP.objects.create(uuid=sip_uuid, currentpath=str(current_path))
-
-
 @pytest.mark.django_db
-def test_main_sets_aip_reingest_type(mocker, sip):
-    mocker.patch("parse_mets_to_db.os")
-    mocker.patch("parse_mets_to_db.etree")
+@mock.patch("archivematica.MCPClient.clientScripts.parse_mets_to_db.os")
+@mock.patch("archivematica.MCPClient.clientScripts.parse_mets_to_db.etree")
+def test_main_sets_aip_reingest_type(etree, os, sip):
     job = None
     assert not models.SIP.objects.filter(uuid=sip.uuid, sip_type="AIP-REIN").exists()
 
-    parse_mets_to_db.main(job, sip.uuid, sip.currentpath)
+    parse_mets_to_db.main(job, str(sip.uuid), sip.currentpath)
 
     assert models.SIP.objects.filter(uuid=sip.uuid, sip_type="AIP-REIN").exists()
 
 
 @pytest.mark.django_db
-def test_main_unsets_partial_reingest_flag(mocker, sip):
-    mocker.patch("parse_mets_to_db.os")
-    mocker.patch("parse_mets_to_db.etree")
+@mock.patch("archivematica.MCPClient.clientScripts.parse_mets_to_db.os")
+@mock.patch("archivematica.MCPClient.clientScripts.parse_mets_to_db.etree")
+def test_main_unsets_partial_reingest_flag(etree, os, sip):
     job = None
     sip.set_partial_reingest()
     assert sip.is_partial_reingest()
 
-    parse_mets_to_db.main(job, sip.uuid, sip.currentpath)
+    parse_mets_to_db.main(job, str(sip.uuid), sip.currentpath)
 
     assert not sip.is_partial_reingest()

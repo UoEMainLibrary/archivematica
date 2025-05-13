@@ -1,27 +1,27 @@
-import os
+import importlib.resources
 import pathlib
 from io import StringIO
+from unittest import mock
 
 import pytest
 from django.utils.translation import gettext_lazy
-from server import translation
-from server import workflow
 
-ASSETS_DIR = (
-    pathlib.Path(__file__).parent.parent.parent / "src" / "MCPServer" / "lib" / "assets"
-)
+from archivematica.MCPServer.server import translation
+from archivematica.MCPServer.server import workflow
+
+ASSETS_DIR = importlib.resources.files("archivematica.MCPServer") / "assets"
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
 
-def test_invert_job_statuses(mocker):
-    mocker.patch(
-        "server.jobs.Job.STATUSES",
-        (
-            (1, gettext_lazy("Uno")),
-            (2, gettext_lazy("Dos")),
-            (3, gettext_lazy("Tres")),
-        ),
-    )
+@mock.patch(
+    "archivematica.MCPServer.server.jobs.Job.STATUSES",
+    (
+        (1, gettext_lazy("Uno")),
+        (2, gettext_lazy("Dos")),
+        (3, gettext_lazy("Tres")),
+    ),
+)
+def test_invert_job_statuses():
     ret = workflow._invert_job_statuses()
     assert ret == {"Uno": 1, "Dos": 2, "Tres": 3}
 
@@ -41,8 +41,8 @@ def test_load_invalid_json():
 @pytest.mark.parametrize(
     "path",
     (
-        os.path.join(ASSETS_DIR, "workflow.json"),
-        os.path.join(FIXTURES_DIR, "workflow-sample.json"),
+        ASSETS_DIR / "workflow.json",
+        FIXTURES_DIR / "workflow-sample.json",
     ),
 )
 def test_load_valid_document(path):
@@ -78,8 +78,9 @@ def test_load_valid_document(path):
     assert isinstance(first_wdir.chain, workflow.BaseLink)
 
     # Workflow __str__ method
-    assert str(wf) == "Chains {}, links {}, watched directories: {}".format(
-        len(chains), len(links), len(wdirs)
+    assert (
+        str(wf)
+        == f"Chains {len(chains)}, links {len(links)}, watched directories: {len(wdirs)}"
     )
 
     # Test normalization of job statuses.
@@ -97,8 +98,8 @@ def test_load_valid_document(path):
     assert first_link.get_label("foobar") is None
 
 
-def test_link_browse_methods(mocker):
-    with open(os.path.join(ASSETS_DIR, "workflow.json")) as fp:
+def test_link_browse_methods():
+    with open(ASSETS_DIR / "workflow.json") as fp:
         wf = workflow.load(fp)
     ln = wf.get_link("1ba589db-88d1-48cf-bb1a-a5f9d2b17378")
     assert ln.get_next_link(code="0").id == "087d27be-c719-47d8-9bbb-9a7d8b609c44"
@@ -112,7 +113,9 @@ def test_get_schema():
     assert schema["$id"] == "https://www.archivematica.org/labs/workflow/schema/v1.json"
 
 
-def test_get_schema_not_found(mocker):
-    mocker.patch("server.workflow._LATEST_SCHEMA", "non-existen-schema")
+@mock.patch(
+    "archivematica.MCPServer.server.workflow._LATEST_SCHEMA", "non-existen-schema"
+)
+def test_get_schema_not_found():
     with pytest.raises(IOError):
         workflow._get_schema()

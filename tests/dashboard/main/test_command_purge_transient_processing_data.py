@@ -1,11 +1,13 @@
 import uuid
+from unittest import mock
 
-import elasticSearchFunctions as es
 import pytest
 from django.core.management import call_command
 from django.utils import timezone
 from django.utils.dateparse import parse_duration
-from main import models
+
+from archivematica.archivematicaCommon import elasticSearchFunctions as es
+from archivematica.dashboard.main import models
 
 
 @pytest.fixture
@@ -85,37 +87,45 @@ def test_purge_command_removes_all_packages(
 
 
 @pytest.mark.django_db
-def test_purge_command_removes_search_documents(search_enabled, old_transfer, mocker):
-    mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.create_indexes_if_needed"
-    )
-    mock_remove_backlog_transfer = mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer"
-    )
-    mock_remove_backlog_transfer_files = mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer_files"
-    )
-
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.create_indexes_if_needed"
+)
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer"
+)
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer_files"
+)
+def test_purge_command_removes_search_documents(
+    mock_remove_backlog_transfer_files,
+    mock_remove_backlog_transfer,
+    search_enabled,
+    old_transfer,
+):
     call_command("purge_transient_processing_data")
 
-    mock_remove_backlog_transfer.assert_called_once_with(mocker.ANY, old_transfer.pk)
+    mock_remove_backlog_transfer.assert_called_once_with(mock.ANY, old_transfer.pk)
     mock_remove_backlog_transfer_files.assert_called_once_with(
-        mocker.ANY, old_transfer.pk
+        mock.ANY, old_transfer.pk
     )
 
 
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.create_indexes_if_needed"
+)
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer"
+)
+@mock.patch(
+    "archivematica.dashboard.main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer_files"
+)
 @pytest.mark.django_db
-def test_purge_command_keeps_search_documents(search_enabled, old_transfer, mocker):
-    mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.create_indexes_if_needed"
-    )
-    mock_remove_backlog_transfer = mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer"
-    )
-    mock_remove_backlog_transfer_files = mocker.patch(
-        "main.management.commands.purge_transient_processing_data.es.remove_backlog_transfer_files"
-    )
-
+def test_purge_command_keeps_search_documents(
+    mock_remove_backlog_transfer_files,
+    mock_remove_backlog_transfer,
+    search_enabled,
+    old_transfer,
+):
     call_command("purge_transient_processing_data", "--keep-searches")
 
     mock_remove_backlog_transfer.assert_not_called()

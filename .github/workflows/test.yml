@@ -1,6 +1,13 @@
 ---
 name: "Test"
 on:
+  workflow_dispatch:
+    inputs:
+      am_version:
+        description: "Archivematica ref (branch, tag or SHA to checkout)"
+        default: "qa/1.x"
+        required: true
+        type: "string"
   pull_request:
   push:
     branches:
@@ -9,7 +16,7 @@ on:
 jobs:
   test:
     name: "Test ${{ matrix.rule }} on ${{ matrix.python-version }}"
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: false
       matrix:
@@ -20,10 +27,9 @@ jobs:
           "archivematica-common",
         ]
         ubuntu-version: [
-          "22.04",
+          "24.04",
         ]
         python-version: [
-          "3.8",
           "3.9",
           "3.10",
           "3.11",
@@ -31,14 +37,20 @@ jobs:
         ]
         include:
           - rule: "storage-service"
-            ubuntu-version: "22.04"
+            ubuntu-version: "24.04"
             python-version: "3.9"
           - rule: "migrations"
-            ubuntu-version: "22.04"
+            ubuntu-version: "24.04"
             python-version: "3.9"
     steps:
       - name: "Check out repository"
+        if: "${{ github.event_name != 'workflow_dispatch' }}"
         uses: "actions/checkout@v4"
+      - name: "Check out repository (manually triggered)"
+        if: "${{ github.event_name == 'workflow_dispatch' }}"
+        uses: "actions/checkout@v4"
+        with:
+          ref: "${{ inputs.am_version || 'qa/1.x' }}"
       - name: "Check out the archivematica-storage-service submodule"
         run: |
           git submodule update --init hack/submodules/archivematica-storage-service/
@@ -53,7 +65,7 @@ jobs:
       - name: "Set up buildx"
         uses: "docker/setup-buildx-action@v3"
       - name: "Build archivematica-tests image"
-        uses: "docker/build-push-action@v5"
+        uses: "docker/build-push-action@v6"
         with:
           context: .
           file: ./hack/Dockerfile
@@ -77,7 +89,7 @@ jobs:
           make -C hack/ test-${{ matrix.rule }}
         env:
           TOXARGS: -vv
-          PYTEST_ADDOPTS: -vv --cov /src/src/ --cov-config=/src/.coveragerc --cov-report xml:/src/coverage.xml
+          PYTEST_ADDOPTS: -vv --cov --cov-config=/src/pyproject.toml --cov-report xml:/src/coverage.xml
           PYTHON_VERSION: ${{ matrix.python-version }}
       - name: "Upload coverage report"
         if: matrix.rule != 'storage-service' && matrix.rule != 'migrations' && github.repository == 'artefactual/archivematica'
@@ -91,13 +103,19 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   frontend:
     name: "Test frontend"
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     defaults:
       run:
-        working-directory: "./src/dashboard/frontend/"
+        working-directory: "./src/archivematica/dashboard/frontend/"
     steps:
       - name: "Check out repository"
+        if: "${{ github.event_name != 'workflow_dispatch' }}"
         uses: "actions/checkout@v4"
+      - name: "Check out repository (manually triggered)"
+        if: "${{ github.event_name == 'workflow_dispatch' }}"
+        uses: "actions/checkout@v4"
+        with:
+          ref: "${{ inputs.am_version || 'qa/1.x' }}"
       - name: "Set up Node JS"
         uses: "actions/setup-node@v4"
         with:
@@ -107,16 +125,22 @@ jobs:
             **/package-lock.json
       - name: "Install frontend dependencies"
         run: |
-          npm install
+          npm ci
       - name: "Run tests"
         run: |
           npm run "test-single-run"
   linting:
     name: "Lint"
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     steps:
       - name: "Check out repository"
+        if: "${{ github.event_name != 'workflow_dispatch' }}"
         uses: "actions/checkout@v4"
+      - name: "Check out repository (manually triggered)"
+        if: "${{ github.event_name == 'workflow_dispatch' }}"
+        uses: "actions/checkout@v4"
+        with:
+          ref: "${{ inputs.am_version || 'qa/1.x' }}"
       - name: "Set up Python 3.9"
         uses: "actions/setup-python@v5"
         with:

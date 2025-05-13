@@ -21,19 +21,22 @@ hashsum checksum utilities. We need to ensure that the output of the tool is
 mapped consistently to something that can be understood by users when
 debugging their preservation workflow.
 """
+
 import subprocess
+from unittest import mock
 
 import pytest
-from client.job import Job
-from main.models import Event
-from main.models import File
-from main.models import Transfer
-from main.models import User
-from verify_checksum import get_file_queryset
-from verify_checksum import Hashsum
-from verify_checksum import NoHashCommandAvailable
-from verify_checksum import PREMISFailure
-from verify_checksum import write_premis_event_per_file
+
+from archivematica.dashboard.main.models import Event
+from archivematica.dashboard.main.models import File
+from archivematica.MCPClient.client.job import Job
+from archivematica.MCPClient.clientScripts.verify_checksum import Hashsum
+from archivematica.MCPClient.clientScripts.verify_checksum import NoHashCommandAvailable
+from archivematica.MCPClient.clientScripts.verify_checksum import PREMISFailure
+from archivematica.MCPClient.clientScripts.verify_checksum import get_file_queryset
+from archivematica.MCPClient.clientScripts.verify_checksum import (
+    write_premis_event_per_file,
+)
 
 
 class TestHashsum:
@@ -41,41 +44,6 @@ class TestHashsum:
 
     assert_exception_string = "Hashsum exception string returned is incorrect"
     assert_return_value = "Hashsum comparison returned something other than 1: {}"
-
-    @pytest.fixture()
-    def user(self, db):
-        return User.objects.create(
-            id=1,
-            username="kmindelan",
-            first_name="Keladry",
-            last_name="Mindelan",
-            is_active=True,
-            is_superuser=True,
-            is_staff=True,
-            email="keladry@mindelan.com",
-        )
-
-    @pytest.fixture
-    def transfer(self, db, user):
-        transfer = Transfer.objects.create(
-            uuid="e95ab50f-9c84-45d5-a3ca-1b0b3f58d9b6",
-            type="Standard",
-            currentlocation="%sharedPath%currentlyProcessing/ユニコード-e95ab50f-9c84-45d5-a3ca-1b0b3f58d9b6/",
-        )
-        transfer.update_active_agent(user_id=user.id)
-        File.objects.create(
-            uuid="8a1f0b59-cf94-47ef-8078-647b77c8a147",
-            checksumtype="sha256",
-            transfer=transfer,
-            filegrpuse="original",
-            checksum="f78615cd834f7fb84832177e73f13e3479f5b5b22ae7a9506c7fa0a14fd9df9e",
-            enteredsystem="2017-01-04T19:35:20Z",
-            modificationtime="2017-01-04T19:35:20Z",
-            originallocation=b"%transferDirectory%objects/has space/lion.svg",
-            currentlocation=b"%transferDirectory%objects/has space/lion.svg",
-            size=18324,
-        )
-        return transfer
 
     @staticmethod
     def setup_hashsum(path, job):
@@ -110,9 +78,9 @@ class TestHashsum:
         configured to work with the file path provided.
         """
         if fixture[1]:
-            assert isinstance(
-                Hashsum(fixture[0]), Hashsum
-            ), "Hashsum object not instantiated correctly"
+            assert isinstance(Hashsum(fixture[0]), Hashsum), (
+                "Hashsum object not instantiated correctly"
+            )
         else:
             with pytest.raises(NoHashCommandAvailable):
                 Hashsum(fixture[0])
@@ -120,7 +88,7 @@ class TestHashsum:
                     "Expecting NoHashCommandAvailable for a filename we shouldn't be able to handle"
                 )
 
-    def test_provenance_string(self, mocker):
+    def test_provenance_string(self):
         """Test to ensure that the string output to the PREMIS event for this
         microservice Job is consistent with what we're expecting. Provenance
         string includes the command called, plus the utility's version string.
@@ -131,21 +99,23 @@ class TestHashsum:
             "md5sum (GNU coreutils) 8.28",
             "Copyright (C) 2017 Free Software Foundation, Inc.",
         ]
-        mock = mocker.patch.object(hashsum, "_call", return_value=version_string)
-        assert (
-            hashsum.version() == "md5sum (GNU coreutils) 8.28"
-        ), "Hashsum version retrieved is incorrect"
-        mock.assert_called_once_with("--version")
-        mocker.patch.object(
-            hashsum,
-            "command_called",
-            (hashsum.COMMAND,) + ("-c", "--strict", hash_file),
-        )
-        expected_provenance = 'program="md5sum -c --strict metadata/checksum.md5"; version="md5sum (GNU coreutils) 8.28"'
-        provenance_output = hashsum.get_command_detail()
-        assert (
-            provenance_output == expected_provenance
-        ), f"Provenance output is incorrect: {provenance_output}"
+        with mock.patch.object(
+            hashsum, "_call", return_value=version_string
+        ) as mock_call:
+            assert hashsum.version() == "md5sum (GNU coreutils) 8.28", (
+                "Hashsum version retrieved is incorrect"
+            )
+            mock_call.assert_called_once_with("--version")
+            expected_provenance = 'program="md5sum -c --strict metadata/checksum.md5"; version="md5sum (GNU coreutils) 8.28"'
+            with mock.patch.object(
+                hashsum,
+                "command_called",
+                (hashsum.COMMAND,) + ("-c", "--strict", hash_file),
+            ):
+                provenance_output = hashsum.get_command_detail()
+                assert provenance_output == expected_provenance, (
+                    f"Provenance output is incorrect: {provenance_output}"
+                )
 
     def test_provenance_string_no_command(self):
         """When nothing has happened, e.g. the checksums haven't been validated
@@ -159,7 +129,7 @@ class TestHashsum:
         except PREMISFailure:
             pass
 
-    def test_compare_hashes_failed(self, mocker):
+    def test_compare_hashes_failed(self):
         """Ensure we get consistent output when the checksum comparison fails."""
         hash_file = "metadata/checksum.sha256"
         job = Job("stub", "stub", ["", ""])
@@ -179,21 +149,25 @@ class TestHashsum:
             "sha256: objects/nested/ファイル3.bin: FAILED\n"
             "sha256: objects/readonly.file: FAILED open or read"
         )
-        mock = mocker.patch.object(hashsum, "_call", return_value=output_string)
-        mocker.patch.object(hashsum, "count_and_compare_lines", return_value=True)
-        mock.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd=toolname, output=output_string
-        )
-        ret = hashsum.compare_hashes("")
-        mock.assert_called_once_with(
-            "-c", "--strict", hash_file, transfer_dir=objects_dir
-        )
-        assert ret == 1, self.assert_return_value.format(ret)
-        assert (
-            job.get_stderr().strip() == exception_string
-        ), self.assert_exception_string
+        with (
+            mock.patch.object(
+                hashsum, "_call", return_value=output_string
+            ) as mock_call,
+            mock.patch.object(hashsum, "count_and_compare_lines", return_value=True),
+        ):
+            mock_call.side_effect = subprocess.CalledProcessError(
+                returncode=1, cmd=toolname, output=output_string
+            )
+            ret = hashsum.compare_hashes("")
+            mock_call.assert_called_once_with(
+                "-c", "--strict", hash_file, transfer_dir=objects_dir
+            )
+            assert ret == 1, self.assert_return_value.format(ret)
+            assert job.get_stderr().strip() == exception_string, (
+                self.assert_exception_string
+            )
 
-    def test_compare_hashes_with_bad_files(self, mocker):
+    def test_compare_hashes_with_bad_files(self):
         """Ensure that the formatting of errors is consistent if improperly
         formatted files are provided to hashsum.
         """
@@ -216,49 +190,57 @@ class TestHashsum:
             "sha1: comparison exited with status: 1. Please check the formatting of the checksums or integrity of the files.\n"
             "sha1: sha1sum: WARNING: 1 line is improperly formatted"
         )
-        mock = mocker.patch.object(hashsum, "_call", return_value=no_proper_output)
-        mocker.patch.object(hashsum, "count_and_compare_lines", return_value=True)
-        mock.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd=toolname, output=no_proper_output
-        )
-        ret = hashsum.compare_hashes("")
-        mock.assert_called_once_with(
-            "-c", "--strict", hash_file, transfer_dir=objects_dir
-        )
-        assert (
-            job.get_stderr().strip() == except_string_no_proper_out
-        ), self.assert_exception_string
-        assert ret == 1, self.assert_return_value.format(ret)
-        # Flush job.error as it isn't flushed automatically.
-        job.error = ""
-        mock = mocker.patch.object(hashsum, "_call", return_value=improper_formatting)
-        mock.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd="sha1sum", output=improper_formatting
-        )
-        ret = hashsum.compare_hashes("")
-        assert (
-            job.get_stderr().strip() == except_string_improper_format
-        ), self.assert_exception_string
-        mock.assert_called_once_with(
-            "-c", "--strict", hash_file, transfer_dir=objects_dir
-        )
-        assert ret == 1, self.assert_return_value.format(ret)
+        with (
+            mock.patch.object(
+                hashsum, "_call", return_value=no_proper_output
+            ) as mock_call,
+            mock.patch.object(hashsum, "count_and_compare_lines", return_value=True),
+        ):
+            mock_call.side_effect = subprocess.CalledProcessError(
+                returncode=1, cmd=toolname, output=no_proper_output
+            )
+            ret = hashsum.compare_hashes("")
+            mock_call.assert_called_once_with(
+                "-c", "--strict", hash_file, transfer_dir=objects_dir
+            )
+            assert job.get_stderr().strip() == except_string_no_proper_out, (
+                self.assert_exception_string
+            )
+            assert ret == 1, self.assert_return_value.format(ret)
+            # Flush job.error as it isn't flushed automatically.
+            job.error = ""
+            with mock.patch.object(
+                hashsum, "_call", return_value=improper_formatting
+            ) as mock_call:
+                mock_call.side_effect = subprocess.CalledProcessError(
+                    returncode=1, cmd="sha1sum", output=improper_formatting
+                )
+                ret = hashsum.compare_hashes("")
+                assert job.get_stderr().strip() == except_string_improper_format, (
+                    self.assert_exception_string
+                )
+                mock_call.assert_called_once_with(
+                    "-c", "--strict", hash_file, transfer_dir=objects_dir
+                )
+                assert ret == 1, self.assert_return_value.format(ret)
 
-    def test_line_comparison_fail(self, mocker):
+    def test_line_comparison_fail(self):
         """If the checksum line and object comparison function fails then
         we want to return early and _call shouldn't be called.
         """
         hash_file = "metadata/checksum.sha1"
         hashsum = self.setup_hashsum(hash_file, Job("stub", "stub", ["", ""]))
         toolname = "sha1sum"
-        mock = mocker.patch.object(hashsum, "_call", return_value=None)
-        mocker.patch.object(hashsum, "count_and_compare_lines", return_value=False)
-        mock.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd=toolname, output=None
-        )
-        ret = hashsum.compare_hashes("")
-        mock.assert_not_called()
-        assert ret == 1, self.assert_return_value.format(ret)
+        with (
+            mock.patch.object(hashsum, "_call", return_value=None) as mock_call,
+            mock.patch.object(hashsum, "count_and_compare_lines", return_value=False),
+        ):
+            mock_call.side_effect = subprocess.CalledProcessError(
+                returncode=1, cmd=toolname, output=None
+            )
+            ret = hashsum.compare_hashes("")
+            mock_call.assert_not_called()
+            assert ret == 1, self.assert_return_value.format(ret)
 
     @pytest.mark.parametrize(
         "fixture",
@@ -273,9 +255,9 @@ class TestHashsum:
     )
     def test_get_ext(self, fixture):
         """get_ext helps to format usefully."""
-        assert (
-            Hashsum.get_ext(fixture[0]) == fixture[1]
-        ), "Incorrect extension returned from Hashsum"
+        assert Hashsum.get_ext(fixture[0]) == fixture[1], (
+            "Incorrect extension returned from Hashsum"
+        )
 
     @staticmethod
     def test_decode_and_version_string():
@@ -286,15 +268,15 @@ class TestHashsum:
             b"sha256sum (GNU coreutils) 8.28\n"
             b"Copyright (C) 2017 Free Software Foundation, Inc."
         )
-        assert Hashsum._decode(version_string)[
-            0
-        ], "Version string incorrectly decoded by Hashsum"
-        assert (
-            Hashsum._decode(version_string)[0] == "sha256sum (GNU coreutils) 8.28"
-        ), "Invalid version string decoded by Hashsum"
+        assert Hashsum._decode(version_string)[0], (
+            "Version string incorrectly decoded by Hashsum"
+        )
+        assert Hashsum._decode(version_string)[0] == "sha256sum (GNU coreutils) 8.28", (
+            "Invalid version string decoded by Hashsum"
+        )
 
     @pytest.mark.django_db
-    def test_write_premis_event_to_db(self, transfer):
+    def test_write_premis_event_to_db(self, transfer, transfer_file):
         """Test that the microservice job connects to the database as
         anticipated, writes its data, and that data can then be retrieved.
         """
@@ -320,31 +302,27 @@ class TestHashsum:
         ]
 
         agent_types = ["organization", "Archivematica user"]
-        package_uuid = "e95ab50f-9c84-45d5-a3ca-1b0b3f58d9b6"
+        package_uuid = str(transfer.uuid)
         kwargs = {"removedtime__isnull": True, "transfer_id": package_uuid}
         file_objs_queryset = File.objects.filter(**kwargs)
         for algorithm in algorithms:
             event_detail = f"{algorithm}: {detail}"
             write_premis_event_per_file(file_objs_queryset, package_uuid, event_detail)
         file_uuids = File.objects.filter(**kwargs).values_list("uuid")
-        assert (
-            file_uuids
-        ), "Files couldn't be retrieved for the transfer from the database"
+        assert file_uuids, (
+            "Files couldn't be retrieved for the transfer from the database"
+        )
         event_algorithms = []
         for uuid_ in file_uuids:
             events = Event.objects.filter(file_uuid=uuid_, event_type=event_type)
-            assert len(events) == len(
-                algorithms
-            ), f"Length of the event objects is not '1', it is: {len(events)}"
-            assert (
-                events[0].event_outcome == event_outcome
-            ), "Event outcome retrieved from the database is incorrect: {}".format(
-                events[0].event_outcome
+            assert len(events) == len(algorithms), (
+                f"Length of the event objects is not '1', it is: {len(events)}"
             )
-            assert (
-                detail in events[0].event_detail
-            ), "Event detail retrieved from the database is incorrect: {}".format(
-                events[0].event_detail
+            assert events[0].event_outcome == event_outcome, (
+                f"Event outcome retrieved from the database is incorrect: {events[0].event_outcome}"
+            )
+            assert detail in events[0].event_detail, (
+                f"Event detail retrieved from the database is incorrect: {events[0].event_detail}"
             )
             # Ensure that UUID creation has happened as anticipated. Will raise
             # a TypeError if otherwise.
@@ -360,41 +338,37 @@ class TestHashsum:
                     idtypes.append(agent.identifiertype)
                     agentnames.append(agent.name)
                     agenttypes.append(agent.agenttype)
-                assert set(idvalues) == set(
-                    identifier_values
-                ), "agent identifier values returned don't match"
-                assert set(idtypes) == set(
-                    identifier_types
-                ), "agent type values returned don't match"
-                assert set(agentnames) == set(
-                    agent_names
-                ), "agent name values returned don't match"
+                assert set(idvalues) == set(identifier_values), (
+                    "agent identifier values returned don't match"
+                )
+                assert set(idtypes) == set(identifier_types), (
+                    "agent type values returned don't match"
+                )
+                assert set(agentnames) == set(agent_names), (
+                    "agent name values returned don't match"
+                )
                 assert set(agenttypes) == set(agent_types), "agent types don't match"
-                assert (
-                    _agent_count == number_of_expected_agents
-                ), "Number of agents is incorrect: {} expected: {}".format(
-                    _agent_count, number_of_expected_agents
+                assert _agent_count == number_of_expected_agents, (
+                    f"Number of agents is incorrect: {_agent_count} expected: {number_of_expected_agents}"
                 )
             # Collect the different checksum algorithms written to ensure they
             # were all written independently in the function.
             for event in events:
                 event_algorithms.append(event.event_detail.split(":", 1)[0])
-        assert set(event_algorithms) == set(
-            algorithms
-        ), "No all algorithms written to PREMIS events"
+        assert set(event_algorithms) == set(algorithms), (
+            "No all algorithms written to PREMIS events"
+        )
 
     @pytest.mark.django_db
-    def test_get_file_obj_queryset(self, transfer):
+    def test_get_file_obj_queryset(self, transfer, transfer_file):
         """Test the retrieval and failure of the queryset used for creating
         events for all the file objects associated with the transfer checksums.
         """
-        package_uuid = "e95ab50f-9c84-45d5-a3ca-1b0b3f58d9b6"
+        package_uuid = str(transfer.uuid)
         assert get_file_queryset(package_uuid)
         invalid_package_uuid = "badf00d1-9c84-45d5-a3ca-1b0b3f58d9b6"
         with pytest.raises(PREMISFailure):
             get_file_queryset(invalid_package_uuid)
             pytest.fail(
-                "Unable to find the transfer objects for the SIP: '{}' in the database".format(
-                    invalid_package_uuid
-                )
+                f"Unable to find the transfer objects for the SIP: '{invalid_package_uuid}' in the database"
             )

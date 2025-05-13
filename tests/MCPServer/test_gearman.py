@@ -1,12 +1,13 @@
 import math
-import pickle
 import uuid
+from unittest import mock
 
 import gearman
 import pytest
-from server.jobs import Job
-from server.tasks import GearmanTaskBackend
-from server.tasks import Task
+
+from archivematica.MCPServer.server.jobs import Job
+from archivematica.MCPServer.server.tasks import GearmanTaskBackend
+from archivematica.MCPServer.server.tasks import Task
 
 
 class MockJob(Job):
@@ -19,8 +20,8 @@ class MockJob(Job):
 
 
 @pytest.fixture
-def simple_job(request, mocker):
-    return MockJob(mocker.Mock(), mocker.Mock(), mocker.Mock(), name="test_job_name")
+def simple_job(request):
+    return MockJob(mock.Mock(), mock.Mock(), mock.Mock(), name="test_job_name")
 
 
 @pytest.fixture
@@ -40,12 +41,12 @@ def format_gearman_request(tasks):
         task_uuid = str(task.uuid)
         request["tasks"][task_uuid] = {
             "uuid": task_uuid,
-            "createdDate": task.start_timestamp.isoformat(" "),
+            "createdDate": task.start_timestamp,
             "arguments": task.arguments,
             "wants_output": task.wants_output,
         }
 
-    return pickle.dumps(request, protocol=0)
+    return request
 
 
 def format_gearman_response(task_results):
@@ -55,15 +56,19 @@ def format_gearman_response(task_results):
         task_uuid = str(task_uuid)
         response["task_results"][task_uuid] = task_data
 
-    return pickle.dumps(response, protocol=0)
+    return response
 
 
-def test_gearman_task_submission(simple_job, simple_task, mocker):
-    # Mock to avoid db writes
-    mocker.patch("server.tasks.backends.gearman_backend.Task.bulk_log")
-    mocker.patch.object(GearmanTaskBackend, "TASK_BATCH_SIZE", 1)
-    mock_client = mocker.patch("server.tasks.backends.gearman_backend.MCPGearmanClient")
-
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.MCPGearmanClient"
+)
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.GearmanTaskBackend.TASK_BATCH_SIZE", 1
+)
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.Task.bulk_log"
+)
+def test_gearman_task_submission(bulk_log, mock_client, simple_job, simple_task):
     backend = GearmanTaskBackend()
     backend.submit_task(simple_job, simple_task)
 
@@ -72,8 +77,7 @@ def test_gearman_task_submission(simple_job, simple_task, mocker):
     submit_job_kwargs = mock_client.return_value.submit_job.call_args[1]
 
     assert submit_job_kwargs["task"] == simple_job.name.encode()
-    # Comparing pickled strings is fragile, so compare the python version
-    assert pickle.loads(submit_job_kwargs["data"]) == pickle.loads(task_data)
+    assert submit_job_kwargs["data"] == task_data
     try:
         uuid.UUID(submit_job_kwargs["unique"].decode())
     except ValueError:
@@ -83,14 +87,16 @@ def test_gearman_task_submission(simple_job, simple_task, mocker):
     assert submit_job_kwargs["max_retries"] == GearmanTaskBackend.MAX_RETRIES
 
 
-def test_gearman_task_result_success(simple_job, simple_task, mocker):
-    # Mock to avoid db writes
-    mocker.patch("server.tasks.backends.gearman_backend.Task.bulk_log")
-
-    mock_client = mocker.patch("server.tasks.backends.gearman_backend.MCPGearmanClient")
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.MCPGearmanClient"
+)
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.Task.bulk_log"
+)
+def test_gearman_task_result_success(bulk_log, mock_client, simple_job, simple_task):
     backend = GearmanTaskBackend()
 
-    mock_gearman_job = mocker.Mock()
+    mock_gearman_job = mock.Mock()
     job_request = gearman.job.GearmanJobRequest(
         mock_gearman_job, background=True, max_attempts=0
     )
@@ -132,21 +138,23 @@ def test_gearman_task_result_success(simple_job, simple_task, mocker):
     assert task_result.done is True
 
 
-def test_gearman_task_result_error(simple_job, simple_task, mocker):
-    # Mock to avoid db writes
-    mocker.patch("server.tasks.backends.gearman_backend.Task.bulk_log")
-
-    mock_client = mocker.patch("server.tasks.backends.gearman_backend.MCPGearmanClient")
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.MCPGearmanClient"
+)
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.Task.bulk_log"
+)
+def test_gearman_task_result_error(bulk_log, mock_client, simple_job, simple_task):
     backend = GearmanTaskBackend()
 
-    mock_gearman_job = mocker.Mock()
+    mock_gearman_job = mock.Mock()
     job_request = gearman.job.GearmanJobRequest(
         mock_gearman_job, background=True, max_attempts=0
     )
 
     def mock_jobs_completed(*args):
         job_request.state = gearman.JOB_FAILED
-        job_request.exception = pickle.dumps(Exception("Error!"), protocol=0)
+        job_request.exception = Exception("Error!")
 
         return [job_request]
 
@@ -171,14 +179,16 @@ def test_gearman_task_result_error(simple_job, simple_task, mocker):
 @pytest.mark.parametrize(
     "reverse_result_order", (False, True), ids=["regular", "reversed"]
 )
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.MCPGearmanClient"
+)
+@mock.patch.object(GearmanTaskBackend, "TASK_BATCH_SIZE", 2)
+@mock.patch(
+    "archivematica.MCPServer.server.tasks.backends.gearman_backend.Task.bulk_log"
+)
 def test_gearman_multiple_batches(
-    simple_job, simple_task, mocker, reverse_result_order
+    bulk_log, mock_client, simple_job, simple_task, reverse_result_order
 ):
-    # Mock to avoid db writes
-    mocker.patch("server.tasks.backends.gearman_backend.Task.bulk_log")
-    mocker.patch.object(GearmanTaskBackend, "TASK_BATCH_SIZE", 2)
-    mock_client = mocker.patch("server.tasks.backends.gearman_backend.MCPGearmanClient")
-
     tasks = []
     for i in range(5):
         task = Task(
@@ -194,7 +204,7 @@ def test_gearman_multiple_batches(
 
     job_requests = []
     for _ in range(3):
-        mock_gearman_job = mocker.Mock()
+        mock_gearman_job = mock.Mock()
         job_request = gearman.job.GearmanJobRequest(
             mock_gearman_job, background=True, max_attempts=0
         )

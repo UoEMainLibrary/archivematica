@@ -3,7 +3,7 @@ Django>=4.2,<5
 agentarchives
 amclient
 ammcpc
-git+https://github.com/artefactual-labs/bagit-python.git@4b8fde73b4e631461bfd7add87e200500d40ca21#egg=bagit
+git+https://github.com/artefactual-labs/bagit-python.git@902051d8410219f6c5f4ce6d43e5b272cf29e89b#egg=bagit
 brotli
 clamd
 django-autoslug
@@ -15,13 +15,13 @@ elasticsearch>=6.0.0,<7.0.0
 git+https://github.com/artefactual-labs/python-gearman.git@b68efc868c7a494dd6a2d2e820fb098a6da9f797#egg=gearman3
 gevent
 gunicorn
-importlib-metadata
 inotify_simple
 jsonschema
 lazy-paged-sequence
 lxml
 metsrw
-git+https://github.com/artefactual-labs/fido.git@564ceb8018a8650fe931cf20e6780ee008e60fca#opf-fido
+orjson
+git+https://github.com/artefactual-labs/fido.git@abc31ecdc93bd9dfefbe6da535341dfc9f03d311#opf-fido
 prometheus_client
 python-dateutil
 requests

@@ -11,6 +11,7 @@ creates a dict from said globals to the list of modules::functions/methods that
 access them. If the dict is non-empty, it is printed and an exit code of 1 is
 returned. Otherwise a happy message is printed and 0 is returned.
 """
+
 import importlib
 import logging
 import pathlib
@@ -21,7 +22,8 @@ from dis import opmap
 
 import django
 import prometheus_client
-from client.loader import get_supported_modules
+
+from archivematica.MCPClient.client.loader import get_supported_modules
 
 django.setup()
 
@@ -91,7 +93,9 @@ def analyze_module(module_name):
     methods.
     """
     global2modules_funcs_2 = {}
-    module = importlib.import_module("clientScripts." + module_name)
+    module = importlib.import_module(
+        "archivematica.MCPClient.clientScripts." + module_name
+    )
     for attr in dir(module):
         val = getattr(module, attr)
         if attr.startswith("__"):
@@ -152,8 +156,8 @@ def test_ensure_no_mutable_globals():
     config_path = (
         pathlib.Path(__file__).parent.parent.parent
         / "src"
+        / "archivematica"
         / "MCPClient"
-        / "lib"
         / "archivematicaClientModules"
     )
 

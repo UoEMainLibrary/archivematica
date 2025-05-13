@@ -1,29 +1,31 @@
 import datetime
 import json
 import uuid
+from unittest import mock
 
-import archivematicaFunctions
 import pytest
 import requests
-from components import helpers
-from components.api import views
 from django.core.management import call_command
 from django.urls import reverse
 from django.utils.timezone import make_aware
 from lxml import etree
-from main.models import DashboardSetting
-from main.models import DublinCore
-from main.models import File
-from main.models import Job
-from main.models import LevelOfDescription
-from main.models import MetadataAppliesToType
-from main.models import PACKAGE_STATUS_COMPLETED_SUCCESSFULLY
-from main.models import RightsStatement
-from main.models import SIP
-from main.models import SIPArrange
-from main.models import Task
-from main.models import Transfer
-from processing import install_builtin_config
+
+from archivematica.archivematicaCommon import archivematicaFunctions
+from archivematica.archivematicaCommon.processing import install_builtin_config
+from archivematica.dashboard.components import helpers
+from archivematica.dashboard.components.api import views
+from archivematica.dashboard.main.models import PACKAGE_STATUS_COMPLETED_SUCCESSFULLY
+from archivematica.dashboard.main.models import SIP
+from archivematica.dashboard.main.models import DashboardSetting
+from archivematica.dashboard.main.models import DublinCore
+from archivematica.dashboard.main.models import File
+from archivematica.dashboard.main.models import Job
+from archivematica.dashboard.main.models import LevelOfDescription
+from archivematica.dashboard.main.models import MetadataAppliesToType
+from archivematica.dashboard.main.models import RightsStatement
+from archivematica.dashboard.main.models import SIPArrange
+from archivematica.dashboard.main.models import Task
+from archivematica.dashboard.main.models import Transfer
 
 
 def load_fixture(fixtures):
@@ -849,16 +851,15 @@ def test_get_unit_status_multiple(
 
 
 @pytest.mark.django_db
-def test_copy_metadata_files_api(mocker):
-    # Mock authentication helper
-    mocker.patch("components.api.views.authenticate_request", return_value=None)
-
-    # Mock helper that actually copies files from the transfer source locations
-    mocker.patch(
-        "components.filesystem_ajax.views._copy_from_transfer_sources",
-        return_value=(None, ""),
-    )
-
+@mock.patch(
+    "archivematica.dashboard.components.api.views.authenticate_request",
+    return_value=None,
+)
+@mock.patch(
+    "archivematica.dashboard.components.filesystem_ajax.views._copy_from_transfer_sources",
+    return_value=(None, ""),
+)
+def test_copy_metadata_files_api(_copy_from_transfer_sources, authenticate_request):
     # Create a SIP
     sip_uuid = str(uuid.uuid4())
     SIP.objects.create(
@@ -867,7 +868,7 @@ def test_copy_metadata_files_api(mocker):
     )
 
     # Call the endpoint with a mocked request
-    request = mocker.Mock(
+    request = mock.Mock(
         **{
             "POST.get.return_value": sip_uuid,
             "POST.getlist.return_value": [
@@ -887,11 +888,11 @@ def test_copy_metadata_files_api(mocker):
     }
 
 
-def test_start_transfer_api_decodes_paths(mocker, admin_client):
-    start_transfer_view = mocker.patch(
-        "components.filesystem_ajax.views.start_transfer",
-        return_value={},
-    )
+@mock.patch(
+    "archivematica.dashboard.components.filesystem_ajax.views.start_transfer",
+    return_value={},
+)
+def test_start_transfer_api_decodes_paths(start_transfer_view, admin_client):
     helpers.set_setting("dashboard_uuid", "test-uuid")
     admin_client.post(
         reverse("api:start_transfer"),
@@ -909,16 +910,18 @@ def test_start_transfer_api_decodes_paths(mocker, admin_client):
     )
 
 
-def test_reingest_approve(mocker, admin_client):
-    mocker.patch("contrib.mcp.client.pickle")
-    job_complete = mocker.patch(
-        "contrib.mcp.client.gearman.JOB_COMPLETE",
-    )
-    mocker.patch(
-        "gearman.GearmanClient",
-        return_value=mocker.Mock(
-            **{"submit_job.return_value": mocker.Mock(state=job_complete)}
-        ),
+@mock.patch(
+    "archivematica.dashboard.contrib.mcp.client.gearman.JOB_COMPLETE",
+)
+@mock.patch("archivematica.dashboard.contrib.mcp.client.GearmanClient")
+def test_reingest_approve(gearman_client, job_complete, admin_client):
+    gearman_client.return_value = mock.Mock(
+        **{
+            "submit_job.return_value": mock.Mock(
+                state=job_complete,
+                result=None,
+            )
+        }
     )
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
@@ -1071,11 +1074,13 @@ def test_unapproved_transfers(admin_client):
         "mcpclient_error",
     ],
 )
-def test_approve_transfer_failures(post_data, expected_error, admin_client, mocker):
+@mock.patch(
+    "archivematica.dashboard.contrib.mcp.client.GearmanClient", side_effect=Exception()
+)
+def test_approve_transfer_failures(
+    gearman_client, post_data, expected_error, admin_client
+):
     helpers.set_setting("dashboard_uuid", "test-uuid")
-
-    # Simulate an unhandled error when calling Gearman.
-    mocker.patch("contrib.mcp.client.MCPClient", side_effect=Exception())
 
     response = admin_client.post(reverse("api:approve_transfer"), post_data)
 
@@ -1084,21 +1089,22 @@ def test_approve_transfer_failures(post_data, expected_error, admin_client, mock
     assert payload == {"error": True, "message": expected_error}
 
 
-def test_approve_transfer(admin_client, mocker):
+@mock.patch("archivematica.dashboard.contrib.mcp.client.gearman.JOB_COMPLETE")
+@mock.patch("archivematica.dashboard.contrib.mcp.client.GearmanClient")
+def test_approve_transfer(gearman_client, job_complete, admin_client):
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
     # Simulate a dashboard <-> Gearman <-> MCPServer interaction.
     # The MCPServer approveTransferByPath RPC method returns a UUID.
     transfer_uuid = uuid.uuid4()
-    mocker.patch("contrib.mcp.client.pickle.loads", side_effect=[transfer_uuid])
-    job_complete = mocker.patch(
-        "contrib.mcp.client.gearman.JOB_COMPLETE",
-    )
-    mocker.patch(
-        "gearman.GearmanClient",
-        return_value=mocker.Mock(
-            **{"submit_job.return_value": mocker.Mock(state=job_complete)}
-        ),
+
+    gearman_client.return_value = mock.Mock(
+        **{
+            "submit_job.return_value": mock.Mock(
+                state=job_complete,
+                result=transfer_uuid,
+            )
+        }
     )
 
     response = admin_client.post(
@@ -1230,12 +1236,11 @@ def test_reingest_deletes_existing_models_related_to_sip(
 
 
 @pytest.mark.django_db
-def test_reingest_full(sip_path, settings, admin_client, mocker):
+def test_reingest_full(sip_path, settings, admin_client):
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
     # Fake UUID generation from the endpoint for a new Transfer.
     transfer_uuid = uuid.uuid4()
-    mocker.patch("uuid.uuid4", return_value=transfer_uuid)
 
     # Set the SHARED_DIRECTORY setting based on the sip_path fixture.
     shared_directory = sip_path.parent.parent
@@ -1244,10 +1249,11 @@ def test_reingest_full(sip_path, settings, admin_client, mocker):
     # There are no existing Transfers initially.
     assert Transfer.objects.count() == 0
 
-    response = admin_client.post(
-        reverse("api:transfer_reingest", kwargs={"target": "transfer"}),
-        {"name": sip_path.name, "uuid": sip_path.name[-36:]},
-    )
+    with mock.patch("uuid.uuid4", return_value=transfer_uuid):
+        response = admin_client.post(
+            reverse("api:transfer_reingest", kwargs={"target": "transfer"}),
+            {"name": sip_path.name, "uuid": sip_path.name[-36:]},
+        )
     assert response.status_code == 200
 
     # Verify the Transfer in the payload contains the fake UUID.
@@ -1280,13 +1286,12 @@ def test_reingest_full(sip_path, settings, admin_client, mocker):
 
 @pytest.mark.django_db
 def test_reingest_full_fails_if_target_directory_already_exists(
-    sip_path, settings, admin_client, mocker
+    sip_path, settings, admin_client
 ):
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
     # Fake UUID generation from the endpoint for a new Transfer.
     transfer_uuid = uuid.uuid4()
-    mocker.patch("uuid.uuid4", return_value=transfer_uuid)
 
     # Set the SHARED_DIRECTORY setting based on the sip_path fixture.
     shared_directory = sip_path.parent.parent
@@ -1298,10 +1303,11 @@ def test_reingest_full_fails_if_target_directory_already_exists(
     )
     (active_transfers_path / f"mytransfer-{transfer_uuid}").mkdir()
 
-    response = admin_client.post(
-        reverse("api:transfer_reingest", kwargs={"target": "transfer"}),
-        {"name": sip_path.name, "uuid": sip_path.name[-36:]},
-    )
+    with mock.patch("uuid.uuid4", return_value=transfer_uuid):
+        response = admin_client.post(
+            reverse("api:transfer_reingest", kwargs={"target": "transfer"}),
+            {"name": sip_path.name, "uuid": sip_path.name[-36:]},
+        )
 
     assert response.status_code == 400
     payload = json.loads(response.content.decode("utf8"))
@@ -1342,35 +1348,31 @@ def test_reingest_partial(sip_path, settings, admin_client):
 
 
 @pytest.mark.django_db
-def test_fetch_levels_of_description_from_atom(admin_client, mocker):
+@mock.patch("requests.get")
+def test_fetch_levels_of_description_from_atom(get, admin_client):
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
     # Set up the AtoM settings used on the Administration tab.
-    DashboardSetting.objects.create(
-        name="upload-qubit_v0.0",
-        value=str(
-            {
-                "url": "http://example.com",
-                "email": "demo@example.com",
-                "password": "password",
-            }
-        ),
+    DashboardSetting.objects.set_dict(
+        "upload-qubit_v0.0",
+        {
+            "url": "http://example.com",
+            "email": "demo@example.com",
+            "password": "password",
+        },
     )
 
     # Simulate interaction with AtoM.
     lods = ["Series", "Subseries", "File"]
-    mocker.patch(
-        "requests.get",
-        side_effect=[
-            mocker.Mock(
-                **{
-                    "status_code": 200,
-                    "json.return_value": [{"name": lod} for lod in lods],
-                },
-                spec=requests.Response,
-            )
-        ],
-    )
+    get.side_effect = [
+        mock.Mock(
+            **{
+                "status_code": 200,
+                "json.return_value": [{"name": lod} for lod in lods],
+            },
+            spec=requests.Response,
+        )
+    ]
 
     # Add existing LODs before calling the endpoint.
     LevelOfDescription.objects.create(name="One existing", sortorder=1)
@@ -1392,27 +1394,20 @@ def test_fetch_levels_of_description_from_atom(admin_client, mocker):
 
 
 @pytest.mark.django_db
-def test_fetch_levels_of_description_from_atom_communication_failure(
-    admin_client, mocker
-):
+@mock.patch(
+    "requests.get", side_effect=[mock.Mock(status_code=503, spec=requests.Response)]
+)
+def test_fetch_levels_of_description_from_atom_communication_failure(get, admin_client):
     helpers.set_setting("dashboard_uuid", "test-uuid")
 
     # Set up the AtoM settings used on the Administration tab.
-    DashboardSetting.objects.create(
-        name="upload-qubit_v0.0",
-        value=str(
-            {
-                "url": "http://example.com",
-                "email": "demo@example.com",
-                "password": "password",
-            }
-        ),
-    )
-
-    # Simulate failing interaction with AtoM.
-    mocker.patch(
-        "requests.get",
-        side_effect=[mocker.Mock(status_code=503, spec=requests.Response)],
+    DashboardSetting.objects.set_dict(
+        "upload-qubit_v0.0",
+        {
+            "url": "http://example.com",
+            "email": "demo@example.com",
+            "password": "password",
+        },
     )
 
     response = admin_client.get(reverse("api:fetch_atom_lods"))

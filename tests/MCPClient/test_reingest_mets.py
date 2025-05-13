@@ -4,27 +4,37 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import archivematicaCreateMETSReingest
 import metsrw
-from client.job import Job
 from django.core.management import call_command
 from django.test import TestCase
 from lxml import etree
-from main import models
-from namespaces import NSMAP
-from namespaces import nsmap_for_premis2
-from version import get_preservation_system_identifier
+
+from archivematica.archivematicaCommon.namespaces import NSMAP
+from archivematica.archivematicaCommon.namespaces import nsmap_for_premis2
+from archivematica.archivematicaCommon.version import get_preservation_system_identifier
+from archivematica.dashboard.main import models
+from archivematica.MCPClient.client.job import Job
+from archivematica.MCPClient.clientScripts import archivematicaCreateMETSReingest
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 FIXTURES_DIR = os.path.join(THIS_DIR, "fixtures")
 
 REMOVE_BLANK_PARSER = etree.XMLParser(remove_blank_text=True)
 
+# This uses the same name as the pytest fixture in conftest and it can be
+# removed when these TestCase subclasses are converted into pytest tests.
+mcp_job = Job("stub", "stub", [])
+
 
 class TestUpdateObject(TestCase):
     """Test updating the PREMIS:OBJECT in the techMD. (update_object)."""
 
-    fixture_files = ["sip-reingest.json", "files.json", "events-reingest.json"]
+    fixture_files = [
+        "agents.json",
+        "sip-reingest.json",
+        "files.json",
+        "events-reingest.json",
+    ]
     fixtures = [os.path.join(FIXTURES_DIR, p) for p in fixture_files]
 
     def setUp(self):
@@ -53,9 +63,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         # Verify no change
         assert (
@@ -89,9 +97,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         assert (
             len(
@@ -165,9 +171,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         assert (
             len(
@@ -250,9 +254,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         assert (
             len(
@@ -328,9 +330,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         assert (
             len(
@@ -429,9 +429,7 @@ class TestUpdateObject(TestCase):
             == 1
         )
         # Run test
-        mets = archivematicaCreateMETSReingest.update_object(
-            Job("stub", "stub", []), mets
-        )
+        mets = archivematicaCreateMETSReingest.update_object(mcp_job, mets)
         root = mets.serialize()
         assert (
             len(
@@ -525,8 +523,8 @@ class TestUpdateObject(TestCase):
 
         for i in range(1, 4):
             path = (
-                './/mets:techMD[@ID="techMD_{}"]'
-                "/mets:mdWrap/mets:xmlData/premis:object".format(i)
+                f'.//mets:techMD[@ID="techMD_{i}"]'
+                "/mets:mdWrap/mets:xmlData/premis:object"
             )
             premis_object = root.find(path, namespaces=nsmap_for_premis2())
             # This is what we're trying to avoid: PREMIS as the default ns.
@@ -567,7 +565,7 @@ class TestUpdateDublinCore(TestCase):
             is None
         )
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_none
+            mcp_job, mets, self.sip_uuid_none
         )
         assert (
             mets.serialize().find(
@@ -586,7 +584,7 @@ class TestUpdateDublinCore(TestCase):
             is None
         )
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_reingest
+            mcp_job, mets, self.sip_uuid_reingest
         )
         assert (
             mets.serialize().find(
@@ -608,7 +606,7 @@ class TestUpdateDublinCore(TestCase):
             is None
         )
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_original
+            mcp_job, mets, self.sip_uuid_original
         )
         root = mets.serialize()
         assert (
@@ -680,7 +678,7 @@ class TestUpdateDublinCore(TestCase):
             == 4
         )
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_updated
+            mcp_job, mets, self.sip_uuid_updated
         )
         root = mets.serialize()
         assert (
@@ -772,7 +770,7 @@ class TestUpdateDublinCore(TestCase):
             == 2
         )
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_updated
+            mcp_job, mets, self.sip_uuid_updated
         )
         root = mets.serialize()
         assert (
@@ -859,7 +857,7 @@ class TestUpdateDublinCore(TestCase):
         )
 
         mets = archivematicaCreateMETSReingest.update_dublincore(
-            Job("stub", "stub", []), mets, self.sip_uuid_none
+            mcp_job, mets, self.sip_uuid_none
         )
         root = mets.serialize()
 
@@ -897,7 +895,7 @@ class TestUpdateRights(TestCase):
         assert mets.tree.find("mets:amdSec/mets:rightsMD", namespaces=NSMAP) is None
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_none, state
+            mcp_job, mets, self.sip_uuid_none, state
         )
         root = mets.serialize()
         assert root.find("mets:amdSec/mets:rightsMD", namespaces=NSMAP) is None
@@ -910,7 +908,7 @@ class TestUpdateRights(TestCase):
         assert mets.tree.find("mets:amdSec/mets:rightsMD", namespaces=NSMAP) is None
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_reingest, state
+            mcp_job, mets, self.sip_uuid_reingest, state
         )
         root = mets.serialize()
         assert root.find("mets:amdSec/mets:rightsMD", namespaces=NSMAP) is None
@@ -928,7 +926,7 @@ class TestUpdateRights(TestCase):
         assert mets.tree.find("mets:amdSec/mets:rightsMD", namespaces=NSMAP) is None
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_original, state
+            mcp_job, mets, self.sip_uuid_original, state
         )
         root = mets.serialize()
 
@@ -976,7 +974,7 @@ class TestUpdateRights(TestCase):
         )
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_updated, state
+            mcp_job, mets, self.sip_uuid_updated, state
         )
         root = mets.serialize()
 
@@ -1057,7 +1055,7 @@ class TestUpdateRights(TestCase):
         )
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_updated, state
+            mcp_job, mets, self.sip_uuid_updated, state
         )
         root = mets.serialize()
 
@@ -1112,7 +1110,7 @@ class TestUpdateRights(TestCase):
         )
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_none, state
+            mcp_job, mets, self.sip_uuid_none, state
         )
         root = mets.serialize()
 
@@ -1140,7 +1138,7 @@ class TestUpdateRights(TestCase):
         )
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_rights(
-            Job("stub", "stub", []), mets, self.sip_uuid_original, state
+            mcp_job, mets, self.sip_uuid_original, state
         )
         root = mets.serialize()
 
@@ -1223,9 +1221,7 @@ class TestAddEvents(TestCase):
             )
             == 9
         )
-        mets = archivematicaCreateMETSReingest.add_events(
-            Job("stub", "stub", []), mets, self.sip_uuid
-        )
+        mets = archivematicaCreateMETSReingest.add_events(mcp_job, mets, self.sip_uuid)
         root = mets.serialize()
         assert (
             len(
@@ -1323,9 +1319,7 @@ class TestAddEvents(TestCase):
             identifiertype="repository code", agenttype="organization"
         ).update(identifiervalue="new-repo-code")
         nsmap_v2 = nsmap_for_premis2()
-        mets = archivematicaCreateMETSReingest.add_events(
-            Job("stub", "stub", []), mets, self.sip_uuid
-        )
+        mets = archivematicaCreateMETSReingest.add_events(mcp_job, mets, self.sip_uuid)
         root = mets.serialize()
         assert (
             len(
@@ -1506,7 +1500,7 @@ class TestAddingNewFiles(TestCase):
             )
 
             mets = archivematicaCreateMETSReingest.add_new_files(
-                Job("stub", "stub", []), mets, self.sip_uuid, str(sip_dir)
+                mcp_job, mets, self.sip_uuid, str(sip_dir)
             )
             root = mets.serialize()
             assert len(root.findall("mets:amdSec", namespaces=NSMAP)) == 3
@@ -1563,7 +1557,7 @@ class TestAddingNewFiles(TestCase):
         )
 
         mets = archivematicaCreateMETSReingest.add_new_files(
-            Job("stub", "stub", []), mets, self.sip_uuid, sip_dir
+            mcp_job, mets, self.sip_uuid, sip_dir
         )
 
         file_uuid = "66370f14-2f64-4750-9d50-547614be40e8"
@@ -1638,7 +1632,7 @@ class TestAddingNewFiles(TestCase):
         )
 
         mets = archivematicaCreateMETSReingest.add_new_files(
-            Job("stub", "stub", []), mets, self.sip_uuid, sip_dir
+            mcp_job, mets, self.sip_uuid, sip_dir
         )
 
         file_uuid = "950253b2-e5b1-4222-bb86-4eb436af5713"
@@ -1727,7 +1721,7 @@ class TestAddingNewFiles(TestCase):
         )
         # Run test
         mets = archivematicaCreateMETSReingest.add_new_files(
-            Job("stub", "stub", []), mets, self.sip_uuid, sip_dir
+            mcp_job, mets, self.sip_uuid, sip_dir
         )
         root = mets.serialize()
         # Check fileSec
@@ -1851,7 +1845,12 @@ class TestAddingNewFiles(TestCase):
 class TestDeleteFiles(TestCase):
     """Test marking files in the METS as deleted. (delete_files)"""
 
-    fixture_files = ["sip-reingest.json", "files.json", "events-reingest.json"]
+    fixture_files = [
+        "agents.json",
+        "sip-reingest.json",
+        "files.json",
+        "events-reingest.json",
+    ]
     fixtures = [os.path.join(FIXTURES_DIR, p) for p in fixture_files]
 
     sip_uuid = "4060ee97-9c3f-4822-afaf-ebdf838284c3"
@@ -1944,7 +1943,7 @@ class TestUpdateMetadataCSV(TestCase):
         assert len(mets.tree.findall("mets:dmdSec", namespaces=NSMAP)) == 0
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_metadata_csv(
-            Job("stub", "stub", []),
+            mcp_job,
             mets,
             self.csv_file,
             self.sip_uuid,
@@ -1974,7 +1973,7 @@ class TestUpdateMetadataCSV(TestCase):
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         sip_dir = os.path.join(FIXTURES_DIR, "metadata_csv_directories", "")
         mets = archivematicaCreateMETSReingest.update_metadata_csv(
-            Job("stub", "stub", []), mets, self.csv_file, self.sip_uuid, sip_dir, state
+            mcp_job, mets, self.csv_file, self.sip_uuid, sip_dir, state
         )
         # Verify the new dmdSec for the Landing_zone directory
         assert len(mets.get_file(label="Landing_zone", type="Directory").dmdsecs) == 1
@@ -1998,7 +1997,7 @@ class TestUpdateMetadataCSV(TestCase):
         assert len(mets.tree.findall("mets:dmdSec", namespaces=NSMAP)) == 1
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_metadata_csv(
-            Job("stub", "stub", []),
+            mcp_job,
             mets,
             self.csv_file,
             self.sip_uuid,
@@ -2033,7 +2032,7 @@ class TestUpdateMetadataCSV(TestCase):
         assert len(mets.tree.findall("mets:dmdSec", namespaces=NSMAP)) == 2
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         mets = archivematicaCreateMETSReingest.update_metadata_csv(
-            Job("stub", "stub", []),
+            mcp_job,
             mets,
             self.csv_file,
             self.sip_uuid,
@@ -2070,7 +2069,7 @@ class TestUpdateMetadataCSV(TestCase):
         state = archivematicaCreateMETSReingest.createmets2.MetsState()
         sip_dir = os.path.join(FIXTURES_DIR, "metadata_csv_nondc", "")
         mets = archivematicaCreateMETSReingest.update_metadata_csv(
-            Job("stub", "stub", []), mets, self.csv_file, self.sip_uuid, sip_dir, state
+            mcp_job, mets, self.csv_file, self.sip_uuid, sip_dir, state
         )
         # Verify the new dmdSecs for the objects/evelyn_s_photo.jpg file
         assert (

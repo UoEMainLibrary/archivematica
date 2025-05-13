@@ -1,49 +1,33 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.5.0
+  rev: v5.0.0
   hooks:
   - id: pretty-format-json
     args: [--no-ensure-ascii, --autofix]
     files: |
       (?x)^(
-        src/MCPServer/lib/assets/.*\.json|
-        src/(MCPClient/MCPServer|dashboard)/osdeps/.*\.json
+        src/archivematica/MCPServer/assets/.*\.json|
+        src/archivematica/(MCPClient|MCPServer|dashboard)/install/.*\.json
       )
-- repo: https://github.com/asottile/pyupgrade
-  rev: v3.15.2
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.8
   hooks:
-  - id: pyupgrade
-    args: [--py38-plus]
-- repo: https://github.com/asottile/reorder_python_imports
-  rev: v3.12.0
-  hooks:
-  - id: reorder-python-imports
-    args: [--py38-plus]
+  - id: ruff
+    args: [--fix, --exit-non-zero-on-fix]
+  - id: ruff-format
 - repo: https://github.com/adamchainz/django-upgrade
-  rev: "1.16.0"
+  rev: "1.18.0"
   hooks:
   - id: django-upgrade
     args: [--target-version, "4.2"]
-- repo: https://github.com/psf/black
-  rev: "23.12.1"
-  hooks:
-  - id: black
-    args: [--safe, --quiet]
-- repo: https://github.com/pycqa/flake8
-  rev: "7.0.0"
-  hooks:
-  - id: flake8
-    additional_dependencies:
-    - flake8-bugbear==23.9.16
-    - flake8-comprehensions==3.14.0
 - repo: https://github.com/igorshubovych/markdownlint-cli
-  rev: v0.39.0
+  rev: v0.44.0
   hooks:
   - id: markdownlint
     exclude: |
       (?x)^(
         ISSUE_TEMPLATE\.md|
-        src/dashboard/(frontend/app|src/media)/vendor/.*
+        src/archivematica/dashboard/(frontend/app|media)/vendor/.*
       )
 - repo: https://github.com/thlorenz/doctoc
   rev: v2.2.0
@@ -53,7 +37,7 @@ repos:
       (?x)^(
         (CONTRIBUTING|SECURITY).*\.md|
         hack/README\.md|
-        src/(MCPServer|MCPClient|dashboard)/install/README\.md
+        src/archivematica/(MCPServer|MCPClient|dashboard)/install/README\.md
       )
 - repo: https://github.com/citation-file-format/cffconvert
   # Current "2.0.0" git tag does not work because of
@@ -61,3 +45,21 @@ repos:
   rev: 054bda51dbe278b3e86f27c890e3f3ac877d616c
   hooks:
     - id: validate-cff
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.15.0
+  hooks:
+  - id: mypy
+    additional_dependencies:
+    - types-requests
+    - types-python-dateutil
+    - pytest
+- repo: https://github.com/tcort/markdown-link-check
+  rev: v3.13.7
+  hooks:
+  - id: markdown-link-check
+    stages: [manual]
+    args: [--quiet, --config, .markdown-link-check.json]
+    exclude: |
+      (?x)^(
+        src/archivematica/dashboard/media/vendor/.*\.md
+      )

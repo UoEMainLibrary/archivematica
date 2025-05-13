@@ -1,23 +1,27 @@
 import json
 import os
 import pathlib
-import pickle
 import uuid
 from unittest import mock
 
 import pytest
 from agentarchives.archivesspace import ArchivesSpaceError
-from archivematicaFunctions import b64decode_string
-from components import helpers
-from components.ingest.views import _adjust_directories_draggability
-from components.ingest.views import _es_results_to_appraisal_tab_format
-from components.ingest.views_as import get_as_system_client
 from django.test import TestCase
 from django.test.client import Client
 from django.urls import reverse
-from main.models import Access
-from main.models import ArchivesSpaceDIPObjectResourcePairing
-from main.models import DashboardSetting
+
+from archivematica.archivematicaCommon.archivematicaFunctions import b64decode_string
+from archivematica.dashboard.components import helpers
+from archivematica.dashboard.components.ingest.views import (
+    _adjust_directories_draggability,
+)
+from archivematica.dashboard.components.ingest.views import (
+    _es_results_to_appraisal_tab_format,
+)
+from archivematica.dashboard.components.ingest.views_as import get_as_system_client
+from archivematica.dashboard.main.models import Access
+from archivematica.dashboard.main.models import ArchivesSpaceDIPObjectResourcePairing
+from archivematica.dashboard.main.models import DashboardSetting
 
 TEST_USER_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "test_user.json"
 SIP_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "sip.json"
@@ -74,7 +78,7 @@ class TestIngest(TestCase):
         response = self.client.get(url)
         assert response.status_code == 200
         title = "".join(
-            ["<h1>" "Normalization Event Detail<br />", "<small>test</small>", "</h1>"]
+            ["<h1>Normalization Event Detail<br />", "<small>test</small>", "</h1>"]
         )
         assert title in response.content.decode("utf8")
 
@@ -91,10 +95,10 @@ class TestIngest(TestCase):
 
     def test_ingest_upload_get(self):
         sip_uuid = "4060ee97-9c3f-4822-afaf-ebdf838284c3"
-        access_target = {"target": "description-slug"}
+        access_target = "description-slug"
         Access.objects.create(
             sipuuid=sip_uuid,
-            target=pickle.dumps(access_target, protocol=0).decode(),
+            target=access_target,
         )
 
         response = self.client.get(
@@ -102,26 +106,26 @@ class TestIngest(TestCase):
         )
 
         assert response.status_code == 200
-        assert json.loads(response.content) == access_target
+        assert json.loads(response.content)["target"] == access_target
 
     def test_ingest_upload_post(self):
         sip_uuid = "4060ee97-9c3f-4822-afaf-ebdf838284c3"
-        access_target = {"target": "description-slug"}
+        access_target = "description-slug"
 
         # Check there is no Access object associated with the SIP yet.
         assert Access.objects.filter(sipuuid=sip_uuid).count() == 0
 
         response = self.client.post(
             reverse("ingest:ingest_upload", args=[sip_uuid]),
-            data=access_target,
+            data={"target": access_target},
         )
         assert response.status_code == 200
         assert json.loads(response.content) == {"ready": True}
 
         # An Access object was created for the SIP with the right target.
-        assert Access.objects.filter(sipuuid=sip_uuid).count() == 1
-        access = Access.objects.get(sipuuid=sip_uuid)
-        assert pickle.loads(access.target.encode()) == access_target
+        assert (
+            Access.objects.filter(sipuuid=sip_uuid, target=access_target).count() == 1
+        )
 
 
 def _assert_file_node_properties_match_record(file_node, record):

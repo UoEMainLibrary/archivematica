@@ -44,7 +44,7 @@ Artefactual developers use Docker Compose on Linux heavily so it's important
 that you're familiar with it, and some choices in the configuration of this
 environment break in other operative systems.
 
-[audience-compose-reference]: https://docs.docker.com/compose/reference/overview/
+[audience-compose-reference]: https://docs.docker.com/reference/cli/docker/compose/
 
 ## Requirements
 
@@ -64,7 +64,6 @@ am-archivematica-mcp-server-1        39.43MiB / 7.763GiB
 am-archivematica-storage-service-1   83.96MiB / 7.763GiB
 am-nginx-1                           2.715MiB / 7.763GiB
 am-elasticsearch-1                   900.2MiB / 7.763GiB
-am-fits-1                            71.09MiB / 7.763GiB
 am-gearmand-1                        3.395MiB / 7.763GiB
 am-mysql-1                           551.9MiB / 7.763GiB
 am-clamavd-1                         570MiB / 7.763GiB
@@ -312,7 +311,6 @@ echo workers | socat - tcp:127.0.0.1:62004,shut-none | grep "_v0.0" | awk '{prin
 | mysql                                   | `tcp/3306`     | `tcp/62001` |
 | elasticsearch                           | `tcp/9200`     | `tcp/62002` |
 | gearman                                 | `tcp/4730`     | `tcp/62004` |
-| fits                                    | `tcp/2113`     | `tcp/62005` |
 | clamavd                                 | `tcp/3310`     | `tcp/62006` |
 | nginx » archivematica-dashboard         | `tcp/80`       | `tcp/62080` |
 | nginx » archivematica-storage-service   | `tcp/8000`     | `tcp/62081` |
@@ -338,10 +336,9 @@ test-storage-service       Run Storage Service tests.
 ```
 
 `tox` sets up separate virtual environments for each target and calls
-`pytest` to run the tests. Their configurations live in the `tox.ini`
-and `pytest.ini` files but you can set the [`TOXARGS`][tox-cli] and
-[`PYTEST_ADDOPTS`][pytest-cli] environment variables to pass command
-line options to each.
+`pytest` to run the tests. Their configurations live in the `pyproject.toml`
+file but you can set the [`TOXARGS`][tox-cli] and [`PYTEST_ADDOPTS`][pytest-cli]
+environment variables to pass command line options to each.
 
 [tox-cli]: https://tox.readthedocs.io/en/latest/config.html#cli
 [pytest-cli]: https://docs.pytest.org/en/stable/example/simple.html#how-to-change-command-line-options-defaults

@@ -4,25 +4,53 @@ import uuid
 
 import metsrw
 import pytest
-from create_transfer_mets import write_mets
-from fpr.models import Format
-from fpr.models import FormatGroup
-from fpr.models import FormatVersion
-from fpr.models import FPCommand
-from fpr.models import FPRule
-from fpr.models import FPTool
+from django.db.models import prefetch_related_objects
 from lxml import etree
-from main.models import Agent
-from main.models import DashboardSetting
-from main.models import Directory
-from main.models import Event
-from main.models import File
-from main.models import FPCommandOutput
-from main.models import RightsStatement
-from main.models import Transfer
 from metsrw.plugins.premisrw import PREMIS_3_0_NAMESPACES
-from version import get_preservation_system_identifier
 
+from archivematica.archivematicaCommon.version import get_preservation_system_identifier
+from archivematica.dashboard.main.models import Agent
+from archivematica.dashboard.main.models import DashboardSetting
+from archivematica.dashboard.main.models import Directory
+from archivematica.dashboard.main.models import Event
+from archivematica.dashboard.main.models import File
+from archivematica.dashboard.main.models import FPCommandOutput
+from archivematica.dashboard.main.models import MetadataAppliesToType
+from archivematica.dashboard.main.models import RightsStatement
+from archivematica.dashboard.main.models import RightsStatementCopyright
+from archivematica.dashboard.main.models import (
+    RightsStatementCopyrightDocumentationIdentifier,
+)
+from archivematica.dashboard.main.models import RightsStatementCopyrightNote
+from archivematica.dashboard.main.models import RightsStatementLicense
+from archivematica.dashboard.main.models import (
+    RightsStatementLicenseDocumentationIdentifier,
+)
+from archivematica.dashboard.main.models import RightsStatementLicenseNote
+from archivematica.dashboard.main.models import (
+    RightsStatementOtherRightsDocumentationIdentifier,
+)
+from archivematica.dashboard.main.models import RightsStatementOtherRightsInformation
+from archivematica.dashboard.main.models import (
+    RightsStatementOtherRightsInformationNote,
+)
+from archivematica.dashboard.main.models import RightsStatementRightsGranted
+from archivematica.dashboard.main.models import RightsStatementRightsGrantedNote
+from archivematica.dashboard.main.models import RightsStatementRightsGrantedRestriction
+from archivematica.dashboard.main.models import (
+    RightsStatementStatuteDocumentationIdentifier,
+)
+from archivematica.dashboard.main.models import RightsStatementStatuteInformation
+from archivematica.dashboard.main.models import RightsStatementStatuteInformationNote
+from archivematica.MCPClient.clientScripts.create_transfer_mets import FSEntriesTree
+from archivematica.MCPClient.clientScripts.create_transfer_mets import agent_to_premis
+from archivematica.MCPClient.clientScripts.create_transfer_mets import dir_obj_to_premis
+from archivematica.MCPClient.clientScripts.create_transfer_mets import event_to_premis
+from archivematica.MCPClient.clientScripts.create_transfer_mets import (
+    file_obj_to_premis,
+)
+from archivematica.MCPClient.clientScripts.create_transfer_mets import rights_to_premis
+from archivematica.MCPClient.clientScripts.create_transfer_mets import write_mets
 
 PREMIS_NAMESPACES = PREMIS_3_0_NAMESPACES
 
@@ -57,13 +85,6 @@ def file_path2(subdir_path):
     file_path.write_text("Hello world")
 
     return file_path
-
-
-@pytest.fixture()
-def transfer(db):
-    return Transfer.objects.create(
-        uuid=uuid.uuid4(), currentlocation=r"%transferDirectory%"
-    )
 
 
 @pytest.fixture()
@@ -131,26 +152,10 @@ def event(request, db, file_obj):
 
 
 @pytest.fixture()
-def fprule(db):
-    format_group = FormatGroup.objects.create(description="group")
-    format = Format.objects.create(description="format", group=format_group)
-    format_version = FormatVersion.objects.create(
-        format=format, version="1.0", description="Version 1.0"
-    )
-    tool = FPTool.objects.create(description="tool")
-    command = FPCommand.objects.create(tool=tool, description="command")
-    return FPRule.objects.create(
-        purpose=FPRule.CHARACTERIZATION,
-        command=command,
-        format=format_version,
-    )
-
-
-@pytest.fixture()
-def fpcommand_output(db, fprule, file_obj):
+def fpcommand_output(db, fprule_characterization, file_obj):
     return FPCommandOutput.objects.create(
         file=file_obj,
-        rule=fprule,
+        rule=fprule_characterization,
         content='<?xml version="1.0" encoding="UTF-8"?><hello>World</hello>',
     )
 
@@ -779,9 +784,7 @@ def test_transfer_mets_includes_other_rights(
     other_rights_note_db_obj = (
         other_rights_db_obj.rightsstatementotherrightsinformationnote_set.first()
     )
-    doc_identifier_db_obj = (
-        other_rights_db_obj.rightsstatementotherrightsdocumentationidentifier_set.first()
-    )
+    doc_identifier_db_obj = other_rights_db_obj.rightsstatementotherrightsdocumentationidentifier_set.first()
 
     other_rights_info = mets_xml.find(
         ".//premis:otherRightsInformation", namespaces=PREMIS_NAMESPACES
@@ -867,3 +870,296 @@ def test_transfer_mets_file_identifiers(tmp_path, transfer, file_obj):
     assert identifiers[0][1].text == str(file_obj.uuid)
     assert identifiers[1][0].text == expected_identifier.type
     assert identifiers[1][1].text == expected_identifier.value
+
+
+def _assert_xpath_selector_value(element, selector, expected_value):
+    assert [
+        e.text
+        for e in element.xpath(
+            selector,
+            namespaces=PREMIS_NAMESPACES,
+        )
+    ] == [expected_value]
+
+
+def _assert_expected_rights_basis(result, expected_rights_basis):
+    selector = ".//premis:rightsStatement/premis:rightsBasis"
+    _assert_xpath_selector_value(result, selector, expected_rights_basis)
+
+
+def _assert_linking_object_identifier_value(
+    result, expected_linking_object_identifier_value
+):
+    selector = ".//premis:rightsStatement/premis:linkingObjectIdentifier/premis:linkingObjectIdentifierValue"
+    _assert_xpath_selector_value(
+        result, selector, expected_linking_object_identifier_value
+    )
+
+
+@pytest.mark.django_db
+def test_file_obj_to_premis_with_blank_fields():
+    file = File.objects.create()
+    # Prefetching for File related objects is done in the write_mets function
+    # when FSEntriesTree is instantiated, but we want to test file_obj_to_premis
+    # in as much isolation as possible so we do it here.
+    prefetch_related_objects([file], *FSEntriesTree.file_queryset_prefetches)
+
+    result = file_obj_to_premis(file)
+
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:objectIdentifier/premis:objectIdentifierValue",
+        str(file.uuid),
+    )
+
+
+@pytest.mark.django_db
+def test_dir_obj_to_premis_with_blank_fields():
+    directory = Directory.objects.create()
+
+    result = dir_obj_to_premis(directory)
+
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:objectIdentifier/premis:objectIdentifierValue",
+        str(directory.uuid),
+    )
+
+
+@pytest.mark.django_db
+def test_event_to_premis_with_blank_fields():
+    event = Event.objects.create()
+    event.agents.set([Agent.objects.create()])
+    expected_linking_agent_identifier_type = ""
+
+    result = event_to_premis(event)
+
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:eventIdentifier/premis:eventIdentifierValue",
+        str(event.event_id),
+    )
+
+    assert {
+        e.text
+        for e in result.xpath(
+            ".//premis:linkingAgentIdentifier/premis:linkingAgentIdentifierType",
+            namespaces=PREMIS_NAMESPACES,
+        )
+    } == {"preservation system", expected_linking_agent_identifier_type}
+
+
+@pytest.mark.django_db
+def test_agent_to_premis_with_blank_fields():
+    agent = Agent.objects.create()
+    expected_identifier_value = ""
+
+    result = agent_to_premis(agent)
+
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:agentIdentifier/premis:agentIdentifierValue",
+        expected_identifier_value,
+    )
+
+
+@pytest.fixture
+def empty_rights_statement(db):
+    return RightsStatement.objects.create(
+        metadataappliestotype=MetadataAppliesToType.objects.create()
+    )
+
+
+def set_right_basis(rights_statement, rights_basis):
+    rights_statement.rightsbasis = rights_basis
+    rights_statement.save()
+
+
+@pytest.fixture
+def copyright_basis(empty_rights_statement):
+    rights_basis = "Copyright"
+
+    copyright = RightsStatementCopyright.objects.create(
+        rightsstatement=empty_rights_statement
+    )
+    RightsStatementCopyrightDocumentationIdentifier.objects.create(
+        rightscopyright=copyright
+    )
+    RightsStatementCopyrightNote.objects.create(rightscopyright=copyright)
+
+    set_right_basis(empty_rights_statement, rights_basis)
+
+    return rights_basis
+
+
+@pytest.mark.django_db
+def test_rights_to_premis_with_blank_copyright_fields(
+    empty_rights_statement, copyright_basis
+):
+    expected_copyright_documentation_role = ""
+    file_uuid = uuid.uuid4()
+    expected_linking_object_identifier_value = str(file_uuid)
+
+    result = rights_to_premis(empty_rights_statement, file_uuid)
+
+    _assert_expected_rights_basis(result, copyright_basis)
+    _assert_linking_object_identifier_value(
+        result, expected_linking_object_identifier_value
+    )
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:rightsStatement/premis:copyrightInformation//premis:copyrightDocumentationRole",
+        expected_copyright_documentation_role,
+    )
+
+
+@pytest.fixture
+def license_basis(empty_rights_statement):
+    rights_basis = "License"
+
+    license = RightsStatementLicense.objects.create(
+        rightsstatement=empty_rights_statement
+    )
+    RightsStatementLicenseDocumentationIdentifier.objects.create(
+        rightsstatementlicense=license
+    )
+    RightsStatementLicenseNote.objects.create(rightsstatementlicense=license)
+
+    set_right_basis(empty_rights_statement, rights_basis)
+
+    return rights_basis
+
+
+@pytest.mark.django_db
+def test_rights_to_premis_with_blank_license_fields(
+    empty_rights_statement, license_basis
+):
+    expected_license_terms = ""
+    file_uuid = uuid.uuid4()
+    expected_linking_object_identifier_value = str(file_uuid)
+
+    result = rights_to_premis(empty_rights_statement, file_uuid)
+
+    _assert_expected_rights_basis(result, license_basis)
+    _assert_linking_object_identifier_value(
+        result, expected_linking_object_identifier_value
+    )
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:rightsStatement/premis:licenseInformation//premis:licenseTerms",
+        expected_license_terms,
+    )
+
+
+@pytest.fixture
+def statute_basis(empty_rights_statement):
+    rights_basis = "Statute"
+
+    statute = RightsStatementStatuteInformation.objects.create(
+        rightsstatement=empty_rights_statement
+    )
+    RightsStatementStatuteDocumentationIdentifier.objects.create(
+        rightsstatementstatute=statute
+    )
+    RightsStatementStatuteInformationNote.objects.create(rightsstatementstatute=statute)
+
+    set_right_basis(empty_rights_statement, rights_basis)
+
+    return rights_basis
+
+
+@pytest.mark.django_db
+def test_rights_to_premis_with_blank_statute_fields(
+    empty_rights_statement, statute_basis
+):
+    expected_statute_documentation_role = ""
+    file_uuid = uuid.uuid4()
+    expected_linking_object_identifier_value = str(file_uuid)
+
+    result = rights_to_premis(empty_rights_statement, file_uuid)
+
+    _assert_expected_rights_basis(result, statute_basis)
+    _assert_linking_object_identifier_value(
+        result, expected_linking_object_identifier_value
+    )
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:rightsStatement/premis:statuteInformation//premis:statuteDocumentationRole",
+        expected_statute_documentation_role,
+    )
+
+
+@pytest.fixture
+def other_rights_basis(empty_rights_statement):
+    rights_basis = "Other"
+
+    other_rights = RightsStatementOtherRightsInformation.objects.create(
+        rightsstatement=empty_rights_statement
+    )
+    RightsStatementOtherRightsDocumentationIdentifier.objects.create(
+        rightsstatementotherrights=other_rights
+    )
+    RightsStatementOtherRightsInformationNote.objects.create(
+        rightsstatementotherrights=other_rights
+    )
+
+    set_right_basis(empty_rights_statement, rights_basis)
+
+    return rights_basis
+
+
+@pytest.mark.django_db
+def test_rights_to_premis_with_blank_other_rights_fields(
+    empty_rights_statement, other_rights_basis
+):
+    expected_other_rights_documentation_role = ""
+    file_uuid = uuid.uuid4()
+    expected_linking_object_identifier_value = str(file_uuid)
+
+    result = rights_to_premis(empty_rights_statement, file_uuid)
+
+    _assert_expected_rights_basis(result, other_rights_basis)
+    _assert_linking_object_identifier_value(
+        result, expected_linking_object_identifier_value
+    )
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:rightsStatement/premis:otherRightsInformation//premis:otherRightsDocumentationRole",
+        expected_other_rights_documentation_role,
+    )
+
+
+@pytest.fixture
+def rights_granted_basis(empty_rights_statement):
+    rights_basis = "Copyright"
+
+    rights_granted = RightsStatementRightsGranted.objects.create(
+        rightsstatement=empty_rights_statement
+    )
+    RightsStatementRightsGrantedNote.objects.create(rightsgranted=rights_granted)
+    RightsStatementRightsGrantedRestriction.objects.create(rightsgranted=rights_granted)
+
+    set_right_basis(empty_rights_statement, rights_basis)
+
+    return rights_basis
+
+
+@pytest.mark.django_db
+def test_rights_to_premis_with_blank_rights_granted_fields(
+    empty_rights_statement, rights_granted_basis
+):
+    expected_rights_granted_note = ""
+    file_uuid = uuid.uuid4()
+    expected_linking_object_identifier_value = str(file_uuid)
+
+    result = rights_to_premis(empty_rights_statement, file_uuid)
+
+    _assert_expected_rights_basis(result, rights_granted_basis)
+    _assert_linking_object_identifier_value(
+        result, expected_linking_object_identifier_value
+    )
+    _assert_xpath_selector_value(
+        result,
+        ".//premis:rightsStatement/premis:rightsGranted/premis:rightsGrantedNote",
+        expected_rights_granted_note,
+    )

@@ -1,21 +1,18 @@
-import check_for_access_directory
+from unittest import mock
+
 import pytest
-from client.job import Job
 from django.utils import timezone
-from main.models import Event
-from main.models import File
-from main.models import SIP
+
+from archivematica.dashboard.main.models import Event
+from archivematica.dashboard.main.models import File
+from archivematica.MCPClient.client.job import Job
+from archivematica.MCPClient.clientScripts import check_for_access_directory
 
 
 @pytest.mark.django_db
-def test_main(mocker, tmp_path):
-    job = mocker.Mock(spec=Job)
+def test_main(tmp_path, sip, sip_directory_path):
+    job = mock.Mock(spec=Job)
     date = timezone.now()
-
-    sip_directory = tmp_path / "sip"
-    sip_directory.mkdir()
-
-    sip = SIP.objects.create(currentpath=sip_directory.as_posix())
 
     access_directory = tmp_path / "access"
     access_directory.mkdir()
@@ -82,7 +79,7 @@ def test_main(mocker, tmp_path):
 
     result = check_for_access_directory.main(
         job,
-        sip_directory.as_posix(),
+        sip_directory_path.as_posix(),
         access_directory.as_posix(),
         objects_directory.as_posix(),
         dip_directory.as_posix(),
