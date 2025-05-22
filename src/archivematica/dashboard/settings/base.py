@@ -575,7 +575,7 @@ SITE_URL = config.get("site_url")
 
 # Only required in production.py
 ALLOWED_HOSTS = ["*"]
-CSRF_TRUSTED_ORIGINS = ["https://dp-processing.is.ed.ac.uk"]
+CSRF_TRUSTED_ORIGINS = ["https://dev.dp-processing.is.ed.ac.uk"]
 SECRET_KEY = "12345"
 
 ALLOW_USER_EDITS = True
