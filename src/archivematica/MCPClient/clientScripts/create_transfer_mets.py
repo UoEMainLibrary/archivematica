@@ -94,15 +94,21 @@ def write_mets(mets_path, transfer_dir_path, base_path_placeholder, transfer_uui
 
     mets.append_file(fsentry_tree.root_node)
     mets.write(mets_path, pretty_print=True)
+    logger.info("**TEST** wrote initial METS to path")
+
     metadata_json_path = os.path.join(transfer_dir_path, "metadata.json")
     if os.path.isfile(metadata_json_path):
+        logger.info("**TEST** found metadata.json at %s", metadata_json_path)
+
         with open(metadata_json_path) as f:
             metadata_entries = json.load(f)
 
         for entry in metadata_entries:
             dc_elements = {k: v for k, v in entry.items() if k.startswith("dc.")}
+            logger.info("**TEST** extracted DC elements: %s", dc_elements)
 
             if not dc_elements:
+                logger.info("**TEST** no dc elements in this entry, skipping")
                 continue
 
             # Find first existing dmdSec with dc metadata (we assume there's at least one)
@@ -110,15 +116,14 @@ def write_mets(mets_path, transfer_dir_path, base_path_placeholder, transfer_uui
                 dmd for dmd in mets.dmdsecs if isinstance(dmd.label, SimpleDMD)
             ]
             if not dc_dmdsecs:
-                # No existing DC section; create one
+                logger.info("**TEST** no existing DC dmdSec found, creating one")
                 dmd = SimpleDMD()
                 mets.dmdsecs.append(DMDSection(dmd))
                 dc_dmdsecs = [mets.dmdsecs[-1]]
 
-            # Merge into the first dc section
             existing_dmd = dc_dmdsecs[0].label
-            # Convert to a dict for merging
             dc_dict = existing_dmd.to_dict()
+            logger.info("**TEST** existing DC dict before merge: %s", dc_dict)
 
             for k, v in dc_elements.items():
                 tag = k.split("dc.")[-1]
@@ -127,18 +132,23 @@ def write_mets(mets_path, transfer_dir_path, base_path_placeholder, transfer_uui
                 else:
                     dc_dict[tag] = [v]
 
-            # Replace the old label with a new one
+            logger.info("**TEST** merged DC dict: %s", dc_dict)
+
             new_dmd = SimpleDMD()
             for tag, values in dc_dict.items():
                 for value in values:
                     new_dmd.add_dc_element(tag, value)
             dc_dmdsecs[0].label = new_dmd
+            logger.info("**TEST** updated first DC dmdSec with new metadata")
 
-        # Rewrite the METS with merged metadata
         mets.write(mets_path, pretty_print=True)
+        logger.info("**TEST** rewrote METS with merged metadata")
 
-        # Delete the metadata.json
         os.remove(metadata_json_path)
+        logger.info("**TEST** removed metadata.json after processing")
+
+    else:
+        logger.info("**TEST** metadata.json not found, skipping metadata merge")
 
 
 def convert_to_premis_hash_function(hash_type):
@@ -857,7 +867,9 @@ def call(jobs):
 
     for job in jobs:
         with job.JobContext(logger=logger):
+            logger.info("**TEST** about to start create_transfer_mets")
             args = parser.parse_args(job.args[1:])
             write_mets(
                 args.xml_file, args.base_path, args.base_path_string, args.sip_uuid
             )
+            logger.info("**TEST** finished create_transfer_mets")
