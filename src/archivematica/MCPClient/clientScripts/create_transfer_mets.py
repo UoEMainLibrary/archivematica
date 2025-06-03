@@ -50,7 +50,9 @@ IE_PREMIS_META["xsi:type"] = "premis:intellectualEntity"
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
+logger.info("**TEST** Logging is working inside create_transfer_mets.")
 
 def write_mets(mets_path, transfer_dir_path, base_path_placeholder, transfer_uuid):
     """
@@ -867,6 +869,7 @@ def call(jobs):
 
     for job in jobs:
         with job.JobContext(logger=logger):
+            print("**TEST** finished create_transfer_mets")
             logger.info("**TEST** about to start create_transfer_mets")
             args = parser.parse_args(job.args[1:])
             write_mets(
